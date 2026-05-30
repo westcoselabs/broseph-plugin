@@ -18,6 +18,8 @@ class Routes {
 	private \Broseph\Services\GitPressIntegration $gitpress;
 	private \Broseph\Services\DiviService $divi;
 	private \Broseph\Services\ContentStrategyResolver $strategy;
+	private \Broseph\Services\LandingPageService $landing_pages;
+	private \Broseph\Services\ReportBuilder $report_builder;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
@@ -26,15 +28,19 @@ class Routes {
 		\Broseph\Services\PageService $pages,
 		\Broseph\Services\GitPressIntegration $gitpress,
 		\Broseph\Services\DiviService $divi,
-		\Broseph\Services\ContentStrategyResolver $strategy
+		\Broseph\Services\ContentStrategyResolver $strategy,
+		\Broseph\Services\LandingPageService $landing_pages,
+		\Broseph\Services\ReportBuilder $report_builder
 	) {
-		$this->signer   = $signer;
-		$this->logger   = $logger;
-		$this->scanner  = $scanner;
-		$this->pages    = $pages;
-		$this->gitpress = $gitpress;
-		$this->divi     = $divi;
-		$this->strategy = $strategy;
+		$this->signer         = $signer;
+		$this->logger         = $logger;
+		$this->scanner        = $scanner;
+		$this->pages          = $pages;
+		$this->gitpress       = $gitpress;
+		$this->divi           = $divi;
+		$this->strategy       = $strategy;
+		$this->landing_pages  = $landing_pages;
+		$this->report_builder = $report_builder;
 	}
 
 	public function init(): void {
@@ -80,6 +86,9 @@ class Routes {
 		( new PagesController( $this->signer, $this->logger, $this->pages ) )->register_routes( self::NAMESPACE );
 		( new GitPressController( $this->signer, $this->logger, $this->gitpress ) )->register_routes( self::NAMESPACE );
 		( new DiviController( $this->signer, $this->logger, $this->divi, $this->gitpress ) )->register_routes( self::NAMESPACE );
+		( new LandingPagesController( $this->signer, $this->logger, $this->landing_pages ) )->register_routes( self::NAMESPACE );
+		( new ReportsController( $this->signer, $this->logger, $this->report_builder ) )->register_routes( self::NAMESPACE );
+		( new ToolsController( $this->signer, $this->logger, $this->gitpress, $this->divi ) )->register_routes( self::NAMESPACE );
 	}
 
 	// Shared permission callback for routes registered directly on this class.

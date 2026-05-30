@@ -39,10 +39,12 @@ class Activator {
 	public static function create_tables(): void {
 		global $wpdb;
 
-		$table           = $wpdb->prefix . 'broseph_action_logs';
 		$charset_collate = $wpdb->get_charset_collate();
 
-		$sql = "CREATE TABLE {$table} (
+		$logs_table    = $wpdb->prefix . 'broseph_action_logs';
+		$reports_table = $wpdb->prefix . 'broseph_reports';
+
+		$sql = "CREATE TABLE {$logs_table} (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   request_id VARCHAR(64) DEFAULT NULL,
   actor VARCHAR(100) DEFAULT NULL,
@@ -59,6 +61,18 @@ class Activator {
   created_at DATETIME NOT NULL,
   PRIMARY KEY  (id),
   KEY idx_status (status),
+  KEY idx_created_at (created_at)
+) {$charset_collate};";
+
+		$sql .= "CREATE TABLE {$reports_table} (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  report_type VARCHAR(100) NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  summary TEXT DEFAULT NULL,
+  report_json LONGTEXT DEFAULT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY  (id),
+  KEY idx_report_type (report_type),
   KEY idx_created_at (created_at)
 ) {$charset_collate};";
 

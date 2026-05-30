@@ -46,4 +46,20 @@ class AuditLogRepository {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		return (int) $this->db->get_var( "SELECT COUNT(*) FROM {$this->table}" );
 	}
+
+	public function count_recent_errors( int $days = 7 ): int {
+		$since = gmdate( 'Y-m-d H:i:s', strtotime( "-{$days} days" ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$count = $this->db->get_var(
+			$this->db->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT COUNT(*) FROM {$this->table} WHERE (status LIKE %s OR status LIKE %s OR status LIKE %s) AND created_at >= %s",
+				'%error%',
+				'%reject%',
+				'%fail%',
+				$since
+			)
+		);
+		return (int) $count;
+	}
 }

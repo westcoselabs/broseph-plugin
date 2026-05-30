@@ -25,12 +25,14 @@ define( 'BROSEPH_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 // Core infrastructure.
 require_once BROSEPH_PLUGIN_DIR . 'includes/Logging/AuditLogRepository.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Logging/ActionLogger.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/Logging/ReportRepository.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Activator.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Deactivator.php';
 
 // Admin.
 require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/SettingsPage.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/LogsPage.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/ReportsPage.php';
 
 // Auth.
 require_once BROSEPH_PLUGIN_DIR . 'includes/Auth/RequestSigner.php';
@@ -41,6 +43,9 @@ require_once BROSEPH_PLUGIN_DIR . 'includes/REST/ScanController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/PagesController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/GitPressController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/DiviController.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/REST/LandingPagesController.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/REST/ReportsController.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/REST/ToolsController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/Routes.php';
 
 // Services.
@@ -49,6 +54,8 @@ require_once BROSEPH_PLUGIN_DIR . 'includes/Services/PageService.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/GitPressIntegration.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/DiviService.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/ContentStrategyResolver.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/Services/LandingPageService.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/Services/ReportBuilder.php';
 
 // Plugin bootstrap.
 require_once BROSEPH_PLUGIN_DIR . 'includes/Plugin.php';
