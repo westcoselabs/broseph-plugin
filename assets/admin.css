@@ -1,0 +1,111 @@
+/* ── Shared layout ───────────────────────────────────────────── */
+
+.broseph-wrap {
+	max-width: 960px;
+}
+
+/* ── Settings page ───────────────────────────────────────────── */
+
+.broseph-info-table-wrap {
+	margin-bottom: 2em;
+}
+
+.broseph-info-table {
+	margin-top: 0.5em;
+}
+
+.broseph-info-table th {
+	width: 220px;
+	font-weight: 600;
+}
+
+.broseph-info-table td code {
+	background: #f0f0f1;
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-size: 13px;
+	word-break: break-all;
+}
+
+.broseph-secret-masked {
+	letter-spacing: 2px;
+	color: #555;
+}
+
+/* ── Logs page ───────────────────────────────────────────────── */
+
+.broseph-logs-table {
+	margin-top: 1em;
+	table-layout: fixed;
+	width: 100%;
+}
+
+.broseph-logs-table th,
+.broseph-logs-table td {
+	vertical-align: top;
+	word-break: break-word;
+}
+
+.broseph-td-date {
+	width: 160px;
+	font-size: 12px;
+	color: #666;
+	white-space: nowrap;
+}
+
+.broseph-td-method {
+	width: 64px;
+	font-family: monospace;
+	font-size: 12px;
+}
+
+.broseph-td-endpoint {
+	max-width: 220px;
+	font-family: monospace;
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.broseph-td-message {
+	font-size: 12px;
+	color: #444;
+}
+
+.broseph-pagination {
+	margin-top: 1em;
+}
+
+/* ── Status badges ───────────────────────────────────────────── */
+
+.broseph-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	line-height: 1.6;
+}
+
+.broseph-badge-success {
+	background: #d1fae5;
+	color: #065f46;
+}
+
+.broseph-badge-error {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.broseph-badge-pending {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.broseph-badge-default {
+	background: #e5e7eb;
+	color: #374151;
+}
