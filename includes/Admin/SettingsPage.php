@@ -120,6 +120,13 @@ class SettingsPage {
 			return;
 		}
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( isset( $_GET['updated'] ) && 'secret' === $_GET['updated'] ) {
+			echo '<div class="notice notice-success is-dismissible"><p>'
+				. esc_html__( 'Shared secret regenerated. Update Open Claw with the new value.', 'broseph' )
+				. '</p></div>';
+		}
+
 		$theme       = wp_get_theme();
 		$site_id     = esc_html( (string) get_option( 'broseph_site_id', '' ) );
 		$raw_secret  = (string) get_option( 'broseph_shared_secret', '' );

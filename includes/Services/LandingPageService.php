@@ -145,8 +145,21 @@ class LandingPageService {
 			$format      = sanitize_text_field( (string) ( $block['format'] ?? 'html' ) );
 			$placeholder = (string) ( $block['placeholder'] ?? '' );
 
+			// Fix 4: whitelist format before building the shortcode.
+			$allowed_formats = array( 'html', 'markdown', 'text', 'code', 'raw' );
+			if ( ! in_array( $format, $allowed_formats, true ) ) {
+				$warnings[] = "Block '{$name}' has invalid format '{$format}'; allowed: "
+					. implode( ', ', $allowed_formats ) . '. Block skipped.';
+				continue;
+			}
+
 			$full_path = $base_path ? "{$base_path}/{$path_suffix}" : $path_suffix;
-			$shortcode = "[divi_github_content owner=\"{$owner}\" repo=\"{$repo}\" path=\"{$full_path}\" format=\"{$format}\"]";
+
+			// Fix 3: esc_attr() on every shortcode attribute value.
+			$shortcode = '[divi_github_content owner="' . esc_attr( $owner )
+				. '" repo="' . esc_attr( $repo )
+				. '" path="' . esc_attr( $full_path )
+				. '" format="' . esc_attr( $format ) . '"]';
 
 			$validation = $this->gitpress->validate_shortcode( $shortcode );
 			if ( ! $validation['valid'] ) {

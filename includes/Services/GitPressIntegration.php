@@ -28,6 +28,10 @@ class GitPressIntegration {
 		if ( null === $file ) {
 			return null;
 		}
+		// get_plugin_data() lives in wp-admin and is not autoloaded in REST context.
+		if ( ! function_exists( 'get_plugin_data' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
 		$data = get_plugin_data( trailingslashit( WP_PLUGIN_DIR ) . $file, false, false );
 		return ! empty( $data['Name'] ) ? $data['Name'] : $file;
 	}

@@ -25,8 +25,12 @@ class SiteScanner {
 	);
 
 	public function scan(): array {
+		// get_plugins() lives in wp-admin and is not autoloaded in REST context.
+		if ( ! function_exists( 'get_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
 		$active_plugins  = (array) get_option( 'active_plugins', array() );
-		$all_plugins     = function_exists( 'get_plugins' ) ? get_plugins() : array();
+		$all_plugins     = get_plugins();
 		$inactive_count  = max( 0, count( $all_plugins ) - count( $active_plugins ) );
 
 		$active_list = array();
