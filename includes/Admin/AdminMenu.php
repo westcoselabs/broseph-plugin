@@ -110,13 +110,13 @@ class AdminMenu {
 			'broseph-admin',
 			BROSEPH_PLUGIN_URL . 'assets/admin.css',
 			array(),
-			BROSEPH_VERSION
+			(string) filemtime( BROSEPH_PLUGIN_DIR . 'assets/admin.css' )
 		);
 		wp_enqueue_script(
 			'broseph-admin',
 			BROSEPH_PLUGIN_URL . 'assets/admin.js',
 			array(),
-			BROSEPH_VERSION,
+			(string) filemtime( BROSEPH_PLUGIN_DIR . 'assets/admin.js' ),
 			true
 		);
 	}

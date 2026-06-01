@@ -145,7 +145,7 @@ class ConnectionPage {
 				</table>
 
 				<div class="broseph-cred-footer">
-					<?php if ( $site_id && $has_secret ) : ?>
+					<?php if ( $has_secret ) : ?>
 					<div class="broseph-env-copy-wrap">
 						<button type="button" id="broseph-copy-env-btn" class="button button-secondary">
 							<?php esc_html_e( 'Copy Open Claw ENV Template', 'broseph' ); ?>
