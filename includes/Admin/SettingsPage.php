@@ -89,6 +89,7 @@ class SettingsPage {
 		?>
 		<div class="wrap broseph-wrap">
 			<h1 class="broseph-page-title"><?php esc_html_e( 'Settings', 'broseph' ); ?></h1>
+			<?php settings_errors(); ?>
 
 			<div class="broseph-card broseph-card-standalone">
 				<h2 class="broseph-card-title"><?php esc_html_e( 'Safety & Behavior Toggles', 'broseph' ); ?></h2>

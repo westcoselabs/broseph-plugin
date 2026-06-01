@@ -31,9 +31,12 @@ require_once BROSEPH_PLUGIN_DIR . 'includes/Activator.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Deactivator.php';
 
 // Admin.
+require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/DashboardPage.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/ConnectionPage.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/SettingsPage.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/LogsPage.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/ReportsPage.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/Admin/AdminMenu.php';
 
 // Auth.
 require_once BROSEPH_PLUGIN_DIR . 'includes/Auth/RequestSigner.php';
