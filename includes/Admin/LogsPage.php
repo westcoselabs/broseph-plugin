@@ -9,40 +9,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class LogsPage {
 
-	private const PAGE_SLUG = 'broseph-logs';
-	private const PER_PAGE  = 30;
+	private const PER_PAGE = 30;
 
 	private \Broseph\Logging\AuditLogRepository $repository;
 
 	public function __construct( \Broseph\Logging\AuditLogRepository $repository ) {
 		$this->repository = $repository;
-	}
-
-	public function init(): void {
-		add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
-		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-	}
-
-	public function add_menu_page(): void {
-		add_management_page(
-			__( 'Broseph Logs', 'broseph' ),
-			__( 'Broseph Logs', 'broseph' ),
-			'manage_options',
-			self::PAGE_SLUG,
-			array( $this, 'render_page' )
-		);
-	}
-
-	public function enqueue_assets( string $hook ): void {
-		if ( 'tools_page_' . self::PAGE_SLUG !== $hook ) {
-			return;
-		}
-		wp_enqueue_style(
-			'broseph-admin',
-			BROSEPH_PLUGIN_URL . 'assets/admin.css',
-			array(),
-			BROSEPH_VERSION
-		);
 	}
 
 	public function render_page(): void {
@@ -57,7 +29,7 @@ class LogsPage {
 		$total_pages  = $total > 0 ? (int) ceil( $total / self::PER_PAGE ) : 1;
 		?>
 		<div class="wrap broseph-wrap">
-			<h1><?php esc_html_e( 'Broseph Action Logs', 'broseph' ); ?></h1>
+			<h1 class="broseph-page-title"><?php esc_html_e( 'Logs', 'broseph' ); ?></h1>
 
 			<p class="description">
 				<?php

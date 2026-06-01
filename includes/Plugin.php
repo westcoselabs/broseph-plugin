@@ -13,10 +13,10 @@ class Plugin {
 
 	private function __construct() {
 		// Core infrastructure.
-		$log_repo   = new Logging\AuditLogRepository();
-		$logger     = new Logging\ActionLogger( $log_repo );
+		$log_repo    = new Logging\AuditLogRepository();
+		$logger      = new Logging\ActionLogger( $log_repo );
 		$report_repo = new Logging\ReportRepository();
-		$signer     = new Auth\RequestSigner();
+		$signer      = new Auth\RequestSigner();
 
 		// Domain services.
 		$scanner           = new Services\SiteScanner();
@@ -27,10 +27,14 @@ class Plugin {
 		$landing_pages     = new Services\LandingPageService( $gitpress, $strategy_resolver, $divi_service );
 		$report_builder    = new Services\ReportBuilder( $scanner, $gitpress, $log_repo, $report_repo );
 
-		// Admin pages.
-		$settings_page = new Admin\SettingsPage();
-		$logs_page     = new Admin\LogsPage( $log_repo );
-		$reports_page  = new Admin\ReportsPage( $report_repo );
+		// Admin hub.
+		$admin_menu = new Admin\AdminMenu(
+			new Admin\DashboardPage( $log_repo, $report_repo ),
+			new Admin\ConnectionPage(),
+			new Admin\ReportsPage( $report_repo ),
+			new Admin\LogsPage( $log_repo ),
+			new Admin\SettingsPage()
+		);
 
 		// REST hub.
 		$routes = new REST\Routes(
@@ -45,9 +49,7 @@ class Plugin {
 			$report_builder
 		);
 
-		$settings_page->init();
-		$logs_page->init();
-		$reports_page->init();
+		$admin_menu->init();
 		$routes->init();
 	}
 
