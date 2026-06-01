@@ -9,13 +9,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class ConnectionPage {
 
-	private const NONCE_ACTION        = 'broseph_regenerate_secret';
-	private const REVEAL_NONCE_ACTION = 'broseph_reveal_secret';
-	private const PAGE_SLUG           = 'broseph-connection';
+	private const NONCE_ACTION = 'broseph_regenerate_secret';
+	private const PAGE_SLUG    = 'broseph-connection';
 
 	public function init(): void {
 		add_action( 'admin_post_broseph_regenerate_secret', array( $this, 'handle_regenerate_secret' ) );
-		add_action( 'wp_ajax_broseph_reveal_secret',        array( $this, 'handle_reveal_secret' ) );
 	}
 
 	public function render_page(): void {
@@ -30,24 +28,54 @@ class ConnectionPage {
 				. '</p></div>';
 		}
 
-		$site_id      = (string) get_option( 'broseph_site_id', '' );
-		$raw_secret   = (string) get_option( 'broseph_shared_secret', '' );
-		$has_secret   = '' !== $raw_secret;
-		// Full secret never emitted in HTML — only last-6 tail after bullets.
-		$masked       = $has_secret ? str_repeat( '•', 40 ) . substr( $raw_secret, -6 ) : '—';
-		$rest_base    = rest_url( 'broseph/v1' );
-		$reveal_nonce = wp_create_nonce( self::REVEAL_NONCE_ACTION );
+		$site_id    = (string) get_option( 'broseph_site_id', '' );
+		$raw_secret = (string) get_option( 'broseph_shared_secret', '' );
+		$has_secret = '' !== $raw_secret;
+		/*
+		 * The masked display shows 40 bullets + last 6 chars.
+		 * The full secret is placed in data-secret for manage_options users only —
+		 * never emitted in public routes, REST responses, or script localisation.
+		 */
+		$masked   = $has_secret ? str_repeat( '•', 40 ) . substr( $raw_secret, -6 ) : '—';
+		$rest_base = rest_url( 'broseph/v1' );
 		?>
-		<div class="wrap broseph-wrap" id="broseph-connection-wrap">
+		<div class="wrap broseph-wrap" id="broseph-connection-wrap"
+			data-site-id="<?php echo esc_attr( $site_id ); ?>"
+			data-site-url="<?php echo esc_attr( site_url() ); ?>"
+			data-rest-base="<?php echo esc_attr( $rest_base ); ?>">
+
 			<h1 class="broseph-page-title"><?php esc_html_e( 'Connection', 'broseph' ); ?></h1>
 
 			<div class="broseph-notice-box">
-				<span class="dashicons dashicons-lock"></span>
+				<span class="dashicons dashicons-lock" aria-hidden="true"></span>
 				<?php esc_html_e( 'Use these credentials inside Open Claw. Never commit the shared secret to GitHub or expose it publicly.', 'broseph' ); ?>
 			</div>
 
+			<details class="broseph-help-box">
+				<summary class="broseph-help-summary">
+					<span class="dashicons dashicons-editor-help" aria-hidden="true"></span>
+					<?php esc_html_e( 'How to connect Open Claw', 'broseph' ); ?>
+				</summary>
+				<div class="broseph-help-content">
+					<ol>
+						<li><?php esc_html_e( 'Copy the Open Claw ENV template using the button below.', 'broseph' ); ?></li>
+						<li><?php esc_html_e( 'Paste it into your Open Claw Docker environment file.', 'broseph' ); ?></li>
+						<li><?php esc_html_e( 'Click Reveal, then Copy Secret, and replace BROSEPH_SHARED_SECRET in the file.', 'broseph' ); ?></li>
+						<li><?php esc_html_e( 'Restart the Open Claw container.', 'broseph' ); ?></li>
+						<li><?php esc_html_e( 'Run the Broseph status test from Open Claw to confirm the connection.', 'broseph' ); ?></li>
+					</ol>
+					<p class="broseph-help-warning">
+						<span class="dashicons dashicons-warning" aria-hidden="true"></span>
+						<?php esc_html_e( 'Do not commit the shared secret to GitHub or share it in screenshots.', 'broseph' ); ?>
+					</p>
+				</div>
+			</details>
+
 			<div class="broseph-card broseph-card-standalone">
 				<h2 class="broseph-card-title"><?php esc_html_e( 'API Credentials', 'broseph' ); ?></h2>
+
+				<div id="broseph-copy-status" class="broseph-copy-status" role="status" aria-live="polite" aria-atomic="true"></div>
+
 				<table class="widefat broseph-info-table">
 					<tbody>
 						<tr>
@@ -69,23 +97,36 @@ class ConnectionPage {
 							<th scope="row"><?php esc_html_e( 'Shared Secret', 'broseph' ); ?></th>
 							<td>
 								<div class="broseph-cred-row">
+									<!--
+										data-secret is only rendered for manage_options users.
+										It never appears in REST responses, public pages, or script localisation.
+									-->
 									<code id="broseph-secret-display"
 										class="broseph-secret-masked"
-										data-masked="<?php echo esc_attr( $masked ); ?>">
+										data-masked="<?php echo esc_attr( $masked ); ?>"
+										data-secret="<?php echo esc_attr( $raw_secret ); ?>"
+										aria-live="polite"
+										aria-label="<?php esc_attr_e( 'Shared secret value', 'broseph' ); ?>">
 										<?php echo esc_html( $masked ); ?>
 									</code>
 									<?php if ( $has_secret ) : ?>
 									<div class="broseph-cred-actions">
-										<button type="button" id="broseph-reveal-btn" class="button button-small">
+										<button type="button" id="broseph-reveal-btn"
+											class="button button-small"
+											aria-expanded="false"
+											aria-controls="broseph-secret-display">
 											<?php esc_html_e( 'Reveal', 'broseph' ); ?>
 										</button>
-										<button type="button" id="broseph-copy-secret-btn" class="button button-small" disabled>
+										<button type="button" id="broseph-copy-secret-btn"
+											class="button button-small"
+											disabled
+											aria-disabled="true">
 											<?php esc_html_e( 'Copy Secret', 'broseph' ); ?>
 										</button>
 									</div>
 									<?php endif; ?>
 								</div>
-								<div id="broseph-reveal-countdown" class="broseph-countdown" hidden></div>
+								<div id="broseph-reveal-countdown" class="broseph-countdown" hidden aria-live="polite"></div>
 							</td>
 						</tr>
 						<tr>
@@ -110,7 +151,7 @@ class ConnectionPage {
 							<?php esc_html_e( 'Copy Open Claw ENV Template', 'broseph' ); ?>
 						</button>
 						<p class="broseph-muted">
-							<?php esc_html_e( 'Copies BROSEPH_SITE_URL, BROSEPH_REST_BASE, BROSEPH_SITE_ID, and BROSEPH_SHARED_SECRET as .env lines ready to paste into Open Claw.', 'broseph' ); ?>
+							<?php esc_html_e( 'Copies BROSEPH_SITE_URL, BROSEPH_REST_BASE, BROSEPH_SITE_ID, and BROSEPH_SHARED_SECRET as .env lines. Reveal the secret first to include the real value, or paste REVEAL_SECRET_FIRST as a placeholder.', 'broseph' ); ?>
 						</p>
 					</div>
 					<?php endif; ?>
@@ -136,39 +177,9 @@ class ConnectionPage {
 				<h2 class="broseph-card-title"><?php esc_html_e( 'Open Claw Status', 'broseph' ); ?></h2>
 				<p class="broseph-muted"><?php esc_html_e( 'Open Claw connection status and last-seen timestamp will appear here once the integration is configured.', 'broseph' ); ?></p>
 			</div>
+
 		</div>
-
-		<script>
-		/* Broseph connection page config — injected server-side, consumed by admin.js */
-		window.brosephConnection = {
-			ajaxUrl:  <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>,
-			nonce:    <?php echo wp_json_encode( $reveal_nonce ); ?>,
-			siteId:   <?php echo wp_json_encode( $site_id ); ?>,
-			siteUrl:  <?php echo wp_json_encode( site_url() ); ?>,
-			restBase: <?php echo wp_json_encode( $rest_base ); ?>
-		};
-		</script>
 		<?php
-	}
-
-	/**
-	 * AJAX handler — returns the full shared secret to an authenticated manage_options user.
-	 * Never logged. Never exposed in REST or default page HTML.
-	 */
-	public function handle_reveal_secret(): void {
-		check_ajax_referer( self::REVEAL_NONCE_ACTION, 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Insufficient permissions.', 403 );
-		}
-
-		$secret = (string) get_option( 'broseph_shared_secret', '' );
-
-		if ( '' === $secret ) {
-			wp_send_json_error( 'No shared secret is configured.', 404 );
-		}
-
-		wp_send_json_success( array( 'secret' => $secret ) );
 	}
 
 	public function handle_regenerate_secret(): void {
