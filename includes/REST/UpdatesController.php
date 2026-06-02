@@ -78,29 +78,11 @@ class UpdatesController extends BaseController {
 			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
 		}
 
-		$confirm = (string) ( $body['confirm'] ?? '' );
-		if ( 'UPDATE_SELECTED_PLUGINS' !== $confirm ) {
-			$this->logger->log(
-				'rejected',
-				array(
-					'task_type' => 'plugin_update_blocked',
-					'endpoint'  => $request->get_route(),
-					'method'    => $request->get_method(),
-					'message'   => 'Missing or invalid confirm token.',
-				)
-			);
-			return new \WP_Error(
-				'broseph_missing_confirm',
-				'confirm must be exactly "UPDATE_SELECTED_PLUGINS".',
-				array( 'status' => 400 )
-			);
-		}
-
 		$plugin_files = is_array( $body['plugin_files'] ?? null ) ? $body['plugin_files'] : null;
 		if ( null === $plugin_files || empty( $plugin_files ) ) {
 			return new \WP_Error(
 				'broseph_bad_request',
-				'plugin_files is required and must be a non-empty array.',
+				'No plugins were selected for update. Provide a non-empty plugin_files array.',
 				array( 'status' => 400 )
 			);
 		}
@@ -154,29 +136,11 @@ class UpdatesController extends BaseController {
 			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
 		}
 
-		$confirm = (string) ( $body['confirm'] ?? '' );
-		if ( 'UPDATE_SELECTED_THEMES' !== $confirm ) {
-			$this->logger->log(
-				'rejected',
-				array(
-					'task_type' => 'theme_update_blocked',
-					'endpoint'  => $request->get_route(),
-					'method'    => $request->get_method(),
-					'message'   => 'Missing or invalid confirm token.',
-				)
-			);
-			return new \WP_Error(
-				'broseph_missing_confirm',
-				'confirm must be exactly "UPDATE_SELECTED_THEMES".',
-				array( 'status' => 400 )
-			);
-		}
-
 		$themes = is_array( $body['themes'] ?? null ) ? $body['themes'] : null;
 		if ( null === $themes || empty( $themes ) ) {
 			return new \WP_Error(
 				'broseph_bad_request',
-				'themes is required and must be a non-empty array.',
+				'No themes were selected for update. Provide a non-empty themes array.',
 				array( 'status' => 400 )
 			);
 		}

@@ -21,9 +21,26 @@ class Activator {
 		}
 
 		$defaults = array(
-			'broseph_allow_live_edits'              => '0',
-			'broseph_allow_js_snippets'             => '0',
-			'broseph_prefer_gitpress_landing_pages' => '1',
+			// Legacy / behavioural.
+			'broseph_allow_live_edits'               => '0',
+			'broseph_allow_js_snippets'              => '0',
+			'broseph_prefer_gitpress_landing_pages'  => '1',
+			// Content permissions.
+			'broseph_allow_publish_pages'            => '0',
+			'broseph_allow_delete_drafts'            => '0',
+			'broseph_allow_gitpress_pages'           => '1',
+			'broseph_allow_divi_template_pages'      => '1',
+			'broseph_allow_divi_code_module_edits'   => '1',
+			// Forms & mail permissions.
+			'broseph_allow_mail_tests'               => '1',
+			'broseph_allow_form_submission_tests'    => '0',
+			'broseph_allow_form_test_mail_fallback'  => '1',
+			// Update permissions (granular; migration handled in PermissionsService).
+			'broseph_allow_plugin_updates'           => '0',
+			'broseph_allow_theme_updates'            => '0',
+			'broseph_allow_active_theme_updates'     => '0',
+			'broseph_allow_inactive_plugin_updates'  => '0',
+			'broseph_allow_core_updates'             => '0',
 		);
 
 		foreach ( $defaults as $key => $value ) {

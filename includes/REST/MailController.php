@@ -11,16 +11,19 @@ class MailController extends BaseController {
 
 	private \Broseph\Services\MailTestService $mail_test;
 	private \Broseph\Services\MailLogService $mail_log;
+	private \Broseph\Services\PermissionsService $permissions;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
 		\Broseph\Logging\ActionLogger $logger,
 		\Broseph\Services\MailTestService $mail_test,
-		\Broseph\Services\MailLogService $mail_log
+		\Broseph\Services\MailLogService $mail_log,
+		\Broseph\Services\PermissionsService $permissions
 	) {
 		parent::__construct( $signer, $logger );
-		$this->mail_test = $mail_test;
-		$this->mail_log  = $mail_log;
+		$this->mail_test   = $mail_test;
+		$this->mail_log    = $mail_log;
+		$this->permissions = $permissions;
 	}
 
 	public function register_routes( string $namespace ): void {
@@ -46,6 +49,10 @@ class MailController extends BaseController {
 	}
 
 	public function handle_test( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_send_mail_tests() ) {
+			return $this->permission_denied( 'can_send_mail_tests' );
+		}
+
 		$body = $request->get_json_params();
 		if ( ! is_array( $body ) ) {
 			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );

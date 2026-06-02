@@ -11,16 +11,19 @@ class ToolsController extends BaseController {
 
 	private \Broseph\Services\GitPressIntegration $gitpress;
 	private \Broseph\Services\DiviService $divi;
+	private \Broseph\Services\PermissionsService $permissions;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
 		\Broseph\Logging\ActionLogger $logger,
 		\Broseph\Services\GitPressIntegration $gitpress,
-		\Broseph\Services\DiviService $divi
+		\Broseph\Services\DiviService $divi,
+		\Broseph\Services\PermissionsService $permissions
 	) {
 		parent::__construct( $signer, $logger );
-		$this->gitpress = $gitpress;
-		$this->divi     = $divi;
+		$this->gitpress   = $gitpress;
+		$this->divi       = $divi;
+		$this->permissions = $permissions;
 	}
 
 	public function register_routes( string $namespace ): void {
@@ -45,9 +48,9 @@ class ToolsController extends BaseController {
 			)
 		);
 
-		$gp_available    = $this->gitpress->is_active() && $this->gitpress->is_shortcode_registered();
-		$divi_active     = $this->divi->is_divi_active();
-		$updates_allowed = (bool) get_option( 'broseph_allow_plugin_theme_updates', false );
+		$gp_available = $this->gitpress->is_active() && $this->gitpress->is_shortcode_registered();
+		$divi_active  = $this->divi->is_divi_active();
+		$perms        = $this->permissions->get_permissions_summary();
 
 		return new \WP_REST_Response(
 			array(
@@ -56,15 +59,20 @@ class ToolsController extends BaseController {
 				'context'   => array(
 					'gitpress_available' => $gp_available,
 					'divi_active'        => $divi_active,
-					'updates_allowed'    => $updates_allowed,
+					'permissions'        => $perms,
 				),
-				'tools'     => $this->build_manifest( $gp_available, $divi_active, $updates_allowed ),
+				'tools'     => $this->build_manifest( $gp_available, $divi_active, $perms ),
 			),
 			200
 		);
 	}
 
-	private function build_manifest( bool $gp, bool $divi, bool $updates_allowed = false ): array {
+	private function build_manifest( bool $gp, bool $divi, array $perms = array() ): array {
+		// Extract permission flags with safe defaults so callers don't need to check keys.
+		$p = array_merge(
+			array_fill_keys( array_keys( $this->permissions->get_permissions_summary() ), false ),
+			$perms
+		);
 		return array(
 			array(
 				'name'              => 'get_status',
@@ -198,14 +206,14 @@ class ToolsController extends BaseController {
 			),
 			array(
 				'name'              => 'create_gitpress_page',
-				'description'       => 'Default for new AI-generated landing pages. Creates a draft page using GitPress page-level shortcode/full-page canvas. Does not use Divi Builder. Call resolve_content_strategy first if unsure.',
+				'description'       => 'Default for new AI-generated landing pages. Creates a draft page using GitPress page-level shortcode/full-page canvas. Does not use Divi Builder. Requires the "Allow GitPress page creation" permission setting.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/gitpress/pages/create',
 				'risk_level'        => 'draft_mutation',
 				'requires_approval' => false,
 				'requires_gitpress' => true,
 				'requires_divi'     => false,
-				'available'         => $gp,
+				'available'         => $gp && $p['can_create_gitpress_pages'],
 				'input_schema'      => array( 'title', 'slug', 'excerpt', 'shortcode', 'render_position', 'full_page_canvas', 'meta' ),
 				'output_schema'     => array( 'status', 'page_id', 'preview_url', 'edit_url', 'shortcode', 'render_position', 'full_page_canvas', 'warnings' ),
 			),
@@ -244,7 +252,7 @@ class ToolsController extends BaseController {
 				'requires_approval' => false,
 				'requires_gitpress' => true,
 				'requires_divi'     => true,
-				'available'         => $divi && $gp,
+				'available'         => $divi && $gp && $p['can_edit_divi_code_modules'],
 				'input_schema'      => array( 'page_id', 'shortcode', 'placement', 'save_mode' ),
 				'output_schema'     => array( 'target_page_id', 'original_page_id', 'preview_url', 'inserted_shortcode', 'save_mode_used' ),
 			),
@@ -289,27 +297,40 @@ class ToolsController extends BaseController {
 			),
 			array(
 				'name'              => 'test_form',
-				'description'       => 'Submit a controlled test payload to a detected Divi contact form. Returns submitted/failed/unsupported honestly — never fakes success. For other form types, returns unsupported with a /mail/test fallback hint.',
+				'description'       => 'Submit a real controlled payload to a detected Divi contact form via Divi\'s AJAX handler. This MAY send an email to the form\'s configured recipient. Returns submitted/failed/unsupported — never fakes success. Requires "Allow contact form submission tests" permission.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/forms/test',
-				'risk_level'        => 'read_only',
-				'requires_approval' => false,
+				'risk_level'        => 'external_effect_mail_send',
+				'requires_approval' => true,
 				'requires_gitpress' => false,
 				'requires_divi'     => true,
-				'available'         => $divi,
+				'available'         => $divi && $p['can_submit_form_tests'],
 				'input_schema'      => array( 'form_type', 'page_id', 'form_id', 'test_payload' ),
 				'output_schema'     => array( 'status', 'test_supported', 'form_type', 'page_id', 'form_title', 'submitted_fields_masked', 'response_message', 'mail_check_hint', 'warnings' ),
 			),
 			array(
+				'name'              => 'full_test_form',
+				'description'       => 'Orchestrated form test: submits the form via Divi\'s AJAX handler, then checks recent mail logs for delivery confirmation. Fallback to wp_mail() if allowed. Requires "Allow contact form submission tests" or mail permissions.',
+				'method'            => 'POST',
+				'endpoint'          => '/broseph/v1/forms/full-test',
+				'risk_level'        => 'external_effect_mail_send',
+				'requires_approval' => true,
+				'requires_gitpress' => false,
+				'requires_divi'     => true,
+				'available'         => $divi && ( $p['can_submit_form_tests'] || ( $p['can_send_mail_tests'] && $p['can_use_form_mail_fallback'] ) ),
+				'input_schema'      => array( 'form_type', 'page_id', 'test_payload', 'fallback_mail_test', 'fallback_to', 'mail_log_window_seconds' ),
+				'output_schema'     => array( 'final_result', 'form_type', 'page_id', 'form_title', 'submission_status', 'submission_result', 'delivery_status', 'mail_log_source', 'fallback_used', 'submitted_fields_masked', 'warnings', 'note' ),
+			),
+			array(
 				'name'              => 'send_mail_test',
-				'description'       => 'Send a real wp_mail() test through the site\'s configured WP Mail SMTP setup. Returns sent/failed with masked recipient.',
+				'description'       => 'Send a real wp_mail() test through the site\'s configured WP Mail SMTP setup. Returns sent/failed with masked recipient. Requires the "Allow mail tests" permission setting.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/mail/test',
 				'risk_level'        => 'mail_send',
 				'requires_approval' => false,
 				'requires_gitpress' => false,
 				'requires_divi'     => false,
-				'available'         => true,
+				'available'         => $p['can_send_mail_tests'],
 				'input_schema'      => array( 'to', 'label', 'include_site_info' ),
 				'output_schema'     => array( 'status', 'wp_mail_result', 'recipient_masked', 'recipient_domain', 'subject', 'timestamp', 'notes' ),
 			),
@@ -335,7 +356,7 @@ class ToolsController extends BaseController {
 				'requires_approval' => false,
 				'requires_gitpress' => false,
 				'requires_divi'     => true,
-				'available'         => $divi,
+				'available'         => $divi && $p['can_create_divi_template_pages'],
 				'input_schema'      => array( 'template_page_id', 'title', 'slug', 'excerpt', 'replacements', 'meta', 'code_modules' ),
 				'output_schema'     => array( 'status', 'page_id', 'preview_url', 'edit_url', 'divi_builder_active', 'inserted_code_modules', 'replaced_tokens', 'warnings' ),
 			),
@@ -354,28 +375,28 @@ class ToolsController extends BaseController {
 			),
 			array(
 				'name'              => 'update_selected_plugins',
-				'description'       => 'Update explicitly named plugins by file path. Requires broseph_allow_plugin_theme_updates enabled, confirm token, and explicit plugin_files list. Broseph itself is always skipped.',
+				'description'       => 'Update explicitly listed plugins by file path. Requires "Allow plugin updates" in Broseph > Permissions. Only plugins named in plugin_files are updated — no bulk updates. Broseph itself is always skipped.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/updates/plugins/update-selected',
 				'risk_level'        => 'risky_mutation',
 				'requires_approval' => true,
 				'requires_gitpress' => false,
 				'requires_divi'     => false,
-				'available'         => $updates_allowed,
-				'input_schema'      => array( 'plugin_files', 'confirm', 'allow_inactive' ),
+				'available'         => $p['can_update_plugins'],
+				'input_schema'      => array( 'plugin_files', 'allow_inactive' ),
 				'output_schema'     => array( 'results', 'summary' ),
 			),
 			array(
 				'name'              => 'update_selected_themes',
-				'description'       => 'Update explicitly named themes by slug. Requires broseph_allow_plugin_theme_updates enabled, confirm token, and explicit themes list. Active theme skipped unless allow_active_theme: true.',
+				'description'       => 'Update explicitly listed themes by slug. Requires "Allow theme updates" in Broseph > Permissions. Only themes named in the themes array are updated — no bulk updates. The active theme is skipped unless allow_active_theme: true and the active-theme permission is enabled.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/updates/themes/update-selected',
 				'risk_level'        => 'risky_mutation',
 				'requires_approval' => true,
 				'requires_gitpress' => false,
 				'requires_divi'     => false,
-				'available'         => $updates_allowed,
-				'input_schema'      => array( 'themes', 'confirm', 'allow_active_theme' ),
+				'available'         => $p['can_update_themes'],
+				'input_schema'      => array( 'themes', 'allow_active_theme' ),
 				'output_schema'     => array( 'results', 'summary' ),
 			),
 		);

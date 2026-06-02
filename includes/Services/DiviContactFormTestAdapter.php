@@ -152,7 +152,8 @@ class DiviContactFormTestAdapter {
 					'Referer'          => $page_url,
 					'X-Requested-With' => 'XMLHttpRequest',
 				),
-				'sslverify' => false,
+				// Default true; sites with self-signed certs can override via filter.
+				'sslverify' => (bool) apply_filters( 'broseph_divi_form_test_sslverify', true ),
 			)
 		);
 

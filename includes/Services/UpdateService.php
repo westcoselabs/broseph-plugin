@@ -9,6 +9,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class UpdateService {
 
+	private PermissionsService $permissions;
+
+	public function __construct( PermissionsService $permissions ) {
+		$this->permissions = $permissions;
+	}
+
 	// ── Public API ────────────────────────────────────────────────────────────
 
 	public function get_available_updates(): array {
@@ -59,7 +65,14 @@ class UpdateService {
 		return array(
 			'plugins'         => $plugins,
 			'themes'          => $themes,
-			'updates_allowed' => (bool) get_option( 'broseph_allow_plugin_theme_updates', false ),
+			'updates_allowed' => $this->permissions->can_update_plugins() || $this->permissions->can_update_themes(),
+			'permissions'     => array(
+				'can_update_plugins'          => $this->permissions->can_update_plugins(),
+				'can_update_themes'           => $this->permissions->can_update_themes(),
+				'can_update_active_theme'     => $this->permissions->can_update_active_theme(),
+				'can_update_inactive_plugins' => $this->permissions->can_update_inactive_plugins(),
+				'can_update_core'             => $this->permissions->can_update_core(),
+			),
 			'notes'           => array(),
 		);
 	}
@@ -68,7 +81,7 @@ class UpdateService {
 	 * @return array<int,array>|\WP_Error Results array or WP_Error on hard failure.
 	 */
 	public function update_plugins( array $plugin_files, bool $allow_inactive ): array|\WP_Error {
-		$gate = $this->check_updates_gate();
+		$gate = $this->check_plugin_updates_gate();
 		if ( is_wp_error( $gate ) ) {
 			return $gate;
 		}
@@ -123,11 +136,12 @@ class UpdateService {
 			$target_version = $plugin_updates->response[ $plugin_file ]->new_version ?? null;
 
 			$is_active = in_array( $plugin_file, $active_plugins, true );
-			if ( ! $is_active && ! $allow_inactive ) {
-				$results[] = $this->plugin_row(
-					$plugin_file, $name, $prev_version, $target_version,
-					'skipped', 'Plugin is inactive. Set allow_inactive: true to update inactive plugins.'
-				);
+			// Inactive plugin update requires BOTH the permission setting AND allow_inactive in the request.
+			if ( ! $is_active && ! ( $this->permissions->can_update_inactive_plugins() && $allow_inactive ) ) {
+				$msg = ! $this->permissions->can_update_inactive_plugins()
+					? 'Inactive plugin updates are disabled in Broseph permissions.'
+					: 'Plugin is inactive. Set allow_inactive: true to update inactive plugins.';
+				$results[] = $this->plugin_row( $plugin_file, $name, $prev_version, $target_version, 'skipped', $msg );
 				continue;
 			}
 
@@ -156,7 +170,7 @@ class UpdateService {
 	 * @return array<int,array>|\WP_Error Results array or WP_Error on hard failure.
 	 */
 	public function update_themes( array $theme_slugs, bool $allow_active_theme ): array|\WP_Error {
-		$gate = $this->check_updates_gate();
+		$gate = $this->check_theme_updates_gate();
 		if ( is_wp_error( $gate ) ) {
 			return $gate;
 		}
@@ -194,11 +208,12 @@ class UpdateService {
 
 			$target_version = $theme_updates->response[ $slug ]['new_version'] ?? null;
 
-			if ( $slug === $active_theme && ! $allow_active_theme ) {
-				$results[] = $this->theme_row(
-					$slug, $name, $prev_version, $target_version,
-					'skipped', 'This is the active theme. Set allow_active_theme: true to update it.'
-				);
+			// Active theme requires BOTH the permission setting AND allow_active_theme in the request.
+			if ( $slug === $active_theme && ! ( $this->permissions->can_update_active_theme() && $allow_active_theme ) ) {
+				$msg = ! $this->permissions->can_update_active_theme()
+					? 'Active theme updates are disabled in Broseph permissions.'
+					: 'This is the active theme. Set allow_active_theme: true to update it.';
+				$results[] = $this->theme_row( $slug, $name, $prev_version, $target_version, 'skipped', $msg );
 				continue;
 			}
 
@@ -226,12 +241,23 @@ class UpdateService {
 
 	// ── Private helpers ───────────────────────────────────────────────────────
 
-	private function check_updates_gate(): true|\WP_Error {
-		if ( ! (bool) get_option( 'broseph_allow_plugin_theme_updates', false ) ) {
+	private function check_plugin_updates_gate(): true|\WP_Error {
+		if ( ! $this->permissions->can_update_plugins() ) {
 			return new \WP_Error(
-				'broseph_updates_disabled',
-				'Plugin/theme updates are disabled. Enable in Broseph > Settings.',
-				array( 'status' => 403 )
+				'broseph_permission_denied',
+				'This action is disabled in Broseph permissions.',
+				array( 'status' => 403, 'permission' => 'can_update_plugins' )
+			);
+		}
+		return true;
+	}
+
+	private function check_theme_updates_gate(): true|\WP_Error {
+		if ( ! $this->permissions->can_update_themes() ) {
+			return new \WP_Error(
+				'broseph_permission_denied',
+				'This action is disabled in Broseph permissions.',
+				array( 'status' => 403, 'permission' => 'can_update_themes' )
 			);
 		}
 		return true;

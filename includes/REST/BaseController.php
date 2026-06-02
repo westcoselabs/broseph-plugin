@@ -35,5 +35,20 @@ abstract class BaseController {
 		return $result;
 	}
 
+	/**
+	 * Standard 403 response when a Broseph permission setting is disabled.
+	 * The permission key is included so Open Claw knows exactly which toggle to check.
+	 */
+	protected function permission_denied( string $permission ): \WP_Error {
+		return new \WP_Error(
+			'broseph_permission_denied',
+			'This action is disabled in Broseph permissions.',
+			array(
+				'status'     => 403,
+				'permission' => $permission,
+			)
+		);
+	}
+
 	abstract public function register_routes( string $namespace ): void;
 }

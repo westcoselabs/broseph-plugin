@@ -12,18 +12,21 @@ class DiviController extends BaseController {
 	private \Broseph\Services\DiviService $divi;
 	private \Broseph\Services\GitPressIntegration $gitpress;
 	private \Broseph\Services\LandingPageService $landing_pages;
+	private \Broseph\Services\PermissionsService $permissions;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
 		\Broseph\Logging\ActionLogger $logger,
 		\Broseph\Services\DiviService $divi,
 		\Broseph\Services\GitPressIntegration $gitpress,
-		\Broseph\Services\LandingPageService $landing_pages
+		\Broseph\Services\LandingPageService $landing_pages,
+		\Broseph\Services\PermissionsService $permissions
 	) {
 		parent::__construct( $signer, $logger );
 		$this->divi          = $divi;
 		$this->gitpress      = $gitpress;
 		$this->landing_pages = $landing_pages;
+		$this->permissions   = $permissions;
 	}
 
 	public function register_routes( string $namespace ): void {
@@ -84,6 +87,10 @@ class DiviController extends BaseController {
 	}
 
 	public function handle_insert_gitpress( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_edit_divi_code_modules() ) {
+			return $this->permission_denied( 'can_edit_divi_code_modules' );
+		}
+
 		$body = $request->get_json_params();
 		if ( ! is_array( $body ) ) {
 			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
@@ -112,8 +119,7 @@ class DiviController extends BaseController {
 		}
 
 		// Validate save mode.
-		$allow_live_edits = (bool) get_option( 'broseph_allow_live_edits', '0' );
-		if ( 'live_edit' === $save_mode && ! $allow_live_edits ) {
+		if ( 'live_edit' === $save_mode && ! $this->permissions->can_live_edit() ) {
 			return new \WP_Error(
 				'broseph_live_edits_disabled',
 				'live_edit save mode is disabled in plugin settings.',
@@ -177,6 +183,10 @@ class DiviController extends BaseController {
 	}
 
 	public function handle_create_from_template( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_create_divi_template_pages() ) {
+			return $this->permission_denied( 'can_create_divi_template_pages' );
+		}
+
 		$body = $request->get_json_params();
 		if ( ! is_array( $body ) ) {
 			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );

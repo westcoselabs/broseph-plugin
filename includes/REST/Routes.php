@@ -25,6 +25,7 @@ class Routes {
 	private \Broseph\Services\MailLogService $mail_log;
 	private \Broseph\Services\MailTestService $mail_test;
 	private \Broseph\Services\UpdateService $update_service;
+	private \Broseph\Services\PermissionsService $permissions;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
@@ -40,7 +41,8 @@ class Routes {
 		\Broseph\Services\DiviContactFormTestAdapter $divi_form_test,
 		\Broseph\Services\MailLogService $mail_log,
 		\Broseph\Services\MailTestService $mail_test,
-		\Broseph\Services\UpdateService $update_service
+		\Broseph\Services\UpdateService $update_service,
+		\Broseph\Services\PermissionsService $permissions
 	) {
 		$this->signer         = $signer;
 		$this->logger         = $logger;
@@ -56,6 +58,7 @@ class Routes {
 		$this->mail_log        = $mail_log;
 		$this->mail_test       = $mail_test;
 		$this->update_service  = $update_service;
+		$this->permissions     = $permissions;
 	}
 
 	public function init(): void {
@@ -99,14 +102,14 @@ class Routes {
 		// Domain controllers.
 		( new ScanController( $this->signer, $this->logger, $this->scanner ) )->register_routes( self::NAMESPACE );
 		( new PagesController( $this->signer, $this->logger, $this->pages ) )->register_routes( self::NAMESPACE );
-		( new GitPressController( $this->signer, $this->logger, $this->gitpress ) )->register_routes( self::NAMESPACE );
-		( new DiviController( $this->signer, $this->logger, $this->divi, $this->gitpress, $this->landing_pages ) )->register_routes( self::NAMESPACE );
+		( new GitPressController( $this->signer, $this->logger, $this->gitpress, $this->permissions ) )->register_routes( self::NAMESPACE );
+		( new DiviController( $this->signer, $this->logger, $this->divi, $this->gitpress, $this->landing_pages, $this->permissions ) )->register_routes( self::NAMESPACE );
 		( new LandingPagesController( $this->signer, $this->logger, $this->landing_pages ) )->register_routes( self::NAMESPACE );
 		( new ReportsController( $this->signer, $this->logger, $this->report_builder ) )->register_routes( self::NAMESPACE );
-		( new FormsController( $this->signer, $this->logger, $this->form_service, $this->divi_form_test ) )->register_routes( self::NAMESPACE );
-		( new MailController( $this->signer, $this->logger, $this->mail_test, $this->mail_log ) )->register_routes( self::NAMESPACE );
+		( new FormsController( $this->signer, $this->logger, $this->form_service, $this->divi_form_test, $this->mail_log, $this->mail_test, $this->permissions ) )->register_routes( self::NAMESPACE );
+		( new MailController( $this->signer, $this->logger, $this->mail_test, $this->mail_log, $this->permissions ) )->register_routes( self::NAMESPACE );
 		( new UpdatesController( $this->signer, $this->logger, $this->update_service ) )->register_routes( self::NAMESPACE );
-		( new ToolsController( $this->signer, $this->logger, $this->gitpress, $this->divi ) )->register_routes( self::NAMESPACE );
+		( new ToolsController( $this->signer, $this->logger, $this->gitpress, $this->divi, $this->permissions ) )->register_routes( self::NAMESPACE );
 	}
 
 	// Shared permission callback for routes registered directly on this class.

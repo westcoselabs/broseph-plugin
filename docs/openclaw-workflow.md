@@ -1,6 +1,69 @@
-# Open Claw Page Creation Workflow
+# Open Claw – Broseph Workflow Guide
 
-This document is the authoritative guide for how Open Claw should create and modify WordPress pages through Broseph.
+This document is the authoritative guide for how Open Claw should create and modify WordPress pages through Broseph, and how it should read and respect the Broseph permission system.
+
+---
+
+## Permissions
+
+### How permissions work
+
+Broseph has a granular permission system controlled from **Broseph > Permissions** in the WordPress admin. Every permission maps to a WordPress option and is enforced in three places simultaneously:
+
+1. **Settings UI** — the admin enables/disables the permission.
+2. **`/tools` context** — `GET /tools` returns `context.permissions` with the current state of every permission.
+3. **Endpoint enforcement** — every mutation/external-effect endpoint calls `PermissionsService` directly before executing; a disabled permission returns HTTP 403 with `code: broseph_permission_denied`.
+
+### After changing a permission
+
+After the admin toggles a permission in Broseph > Permissions and clicks Save, Open Claw **must** call:
+
+```
+GET /broseph/v1/tools
+```
+
+The response `context.permissions` and each `tool.available` field are the live source of truth. Open Claw should treat these as authoritative — if `available: false`, do not attempt the call.
+
+### Permission error format
+
+When an endpoint rejects due to a disabled permission:
+
+```json
+{
+  "code": "broseph_permission_denied",
+  "message": "This action is disabled in Broseph permissions.",
+  "data": {
+    "status": 403,
+    "permission": "can_create_gitpress_pages"
+  }
+}
+```
+
+The `permission` field tells Open Claw exactly which setting to check in Broseph > Permissions.
+
+### Full permissions map
+
+| Permission key | Default | Controls |
+|---|---|---|
+| `can_publish_pages` | false | Publishing draft pages |
+| `can_live_edit` | false | Editing published pages directly |
+| `can_delete_drafts` | false | Trashing draft pages |
+| `can_create_gitpress_pages` | true | `/gitpress/pages/create` |
+| `can_create_divi_template_pages` | true | `/divi/pages/create-from-template` |
+| `can_edit_divi_code_modules` | true | `/divi/code-module/insert-gitpress` |
+| `can_use_js_snippets` | false | JS in code modules |
+| `can_send_mail_tests` | true | `/mail/test` |
+| `can_submit_form_tests` | false | `/forms/test`, `/forms/full-test` |
+| `can_use_form_mail_fallback` | true | Fallback in `/forms/full-test` |
+| `can_update_plugins` | false | `/updates/plugins/update-selected` |
+| `can_update_themes` | false | `/updates/themes/update-selected` |
+| `can_update_active_theme` | false | Active-theme updates (also requires `can_update_themes`) |
+| `can_update_inactive_plugins` | false | Inactive plugin updates (also requires `can_update_plugins`) |
+| `can_update_core` | false | WordPress core updates |
+| `can_execute_php` | **permanently false** | PHP execution — always blocked |
+| `can_self_update` | **permanently false** | Broseph self-update — always blocked |
+
+---
 
 ---
 
@@ -295,6 +358,103 @@ Create or modify a page?
     └── Nothing available ──▶ native_draft
                               POST /pages/create-draft
 ```
+
+---
+
+## Plugin and Theme Update Workflow
+
+### When Open Claw may update plugins or themes
+
+Open Claw may update selected plugins or themes when **all three** conditions are met:
+
+1. The **"Allow plugin/theme updates"** setting is enabled in Broseph > Settings.
+2. The user (Brandon) has **explicitly prompted** for the update.
+3. The request payload contains an **explicit list** of plugins (`plugin_files`) or themes (`themes`) to update.
+
+No confirm token is required. The admin setting is the safety gate.
+
+### What is always skipped (regardless of settings)
+
+- WordPress core — not supported in any Broseph phase.
+- Broseph itself — the plugin cannot update itself.
+- The active theme — skipped unless `allow_active_theme: true` is passed explicitly.
+- Inactive plugins — skipped unless `allow_inactive: true` is passed explicitly.
+- Plugins or themes not in the explicit list — no bulk updates.
+- Plugins with no available update — silently reported as `skipped`.
+
+### Example: update a theme
+
+**Endpoint:** `POST /wp-json/broseph/v1/updates/themes/update-selected`
+**Signed routePath:** `/broseph/v1/updates/themes/update-selected`
+
+```json
+{
+  "themes": ["twentytwentyfive"]
+}
+```
+
+**Expected response:**
+```json
+{
+  "results": [
+    {
+      "theme": "twentytwentyfive",
+      "name": "Twenty Twenty-Five",
+      "previous_version": "1.0",
+      "target_version": "1.1",
+      "status": "updated",
+      "message": "Updated from 1.0 to 1.1."
+    }
+  ],
+  "summary": {
+    "updated": 1,
+    "skipped": 0,
+    "failed": 0
+  }
+}
+```
+
+### Example: update selected plugins
+
+**Endpoint:** `POST /wp-json/broseph/v1/updates/plugins/update-selected`
+**Signed routePath:** `/broseph/v1/updates/plugins/update-selected`
+
+```json
+{
+  "plugin_files": [
+    "contact-form-7/wp-contact-form-7.php",
+    "wordfence/wordfence.php"
+  ],
+  "allow_inactive": false
+}
+```
+
+### Error responses
+
+**Updates disabled (403):**
+```json
+{
+  "code": "broseph_updates_disabled",
+  "message": "Plugin/theme updates are disabled in Broseph settings. Enable \"Allow plugin/theme updates\" under Broseph > Settings."
+}
+```
+
+**Empty list (400):**
+```json
+{
+  "code": "broseph_bad_request",
+  "message": "No plugins were selected for update. Provide a non-empty plugin_files array."
+}
+```
+
+### Pre-update checklist
+
+Before sending an update request:
+
+- [ ] Confirm with the user that they want to apply the update now.
+- [ ] Call `GET /updates` first to verify which updates are available and that `updates_allowed: true`.
+- [ ] Build the explicit list — never send a wildcard or "update all".
+- [ ] Note the `previous_version` from the response for rollback reference.
 
 ---
 

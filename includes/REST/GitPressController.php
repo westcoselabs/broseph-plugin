@@ -10,14 +10,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 class GitPressController extends BaseController {
 
 	private \Broseph\Services\GitPressIntegration $gitpress;
+	private \Broseph\Services\PermissionsService $permissions;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
 		\Broseph\Logging\ActionLogger $logger,
-		\Broseph\Services\GitPressIntegration $gitpress
+		\Broseph\Services\GitPressIntegration $gitpress,
+		\Broseph\Services\PermissionsService $permissions
 	) {
 		parent::__construct( $signer, $logger );
-		$this->gitpress = $gitpress;
+		$this->gitpress   = $gitpress;
+		$this->permissions = $permissions;
 	}
 
 	public function register_routes( string $namespace ): void {
@@ -138,6 +141,10 @@ class GitPressController extends BaseController {
 	}
 
 	public function handle_create_page( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_create_gitpress_pages() ) {
+			return $this->permission_denied( 'can_create_gitpress_pages' );
+		}
+
 		$body = $request->get_json_params();
 		if ( ! is_array( $body ) ) {
 			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
