@@ -37,7 +37,8 @@ class DashboardPage {
 		$latest_reports  = $this->report_repo->get_latest( 1 );
 		$latest_report   = ! empty( $latest_reports ) ? $latest_reports[0] : null;
 
-		$conn_url     = admin_url( 'admin.php?page=broseph-connection' );
+		$updates_allowed = (bool) get_option( 'broseph_allow_plugin_theme_updates', false );
+		$conn_url        = admin_url( 'admin.php?page=broseph-connection' );
 		$reports_url  = admin_url( 'admin.php?page=broseph-reports' );
 		$logs_url     = admin_url( 'admin.php?page=broseph-logs' );
 		$settings_url = admin_url( 'admin.php?page=broseph-settings' );
@@ -205,6 +206,11 @@ class DashboardPage {
 						<dd>
 							<?php // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 							<?php echo $this->badge( 'pending', __( 'Adapter-based', 'broseph' ) ); ?>
+						</dd>
+						<dt><?php esc_html_e( 'Plugin/Theme Updates', 'broseph' ); ?></dt>
+						<dd>
+							<?php // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<?php echo $updates_allowed ? $this->badge( 'pending', __( 'Enabled', 'broseph' ) ) : $this->badge( 'default', __( 'Disabled', 'broseph' ) ); ?>
 						</dd>
 					</dl>
 				</div>

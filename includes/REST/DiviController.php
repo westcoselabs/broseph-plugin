@@ -11,16 +11,19 @@ class DiviController extends BaseController {
 
 	private \Broseph\Services\DiviService $divi;
 	private \Broseph\Services\GitPressIntegration $gitpress;
+	private \Broseph\Services\LandingPageService $landing_pages;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
 		\Broseph\Logging\ActionLogger $logger,
 		\Broseph\Services\DiviService $divi,
-		\Broseph\Services\GitPressIntegration $gitpress
+		\Broseph\Services\GitPressIntegration $gitpress,
+		\Broseph\Services\LandingPageService $landing_pages
 	) {
 		parent::__construct( $signer, $logger );
-		$this->divi     = $divi;
-		$this->gitpress = $gitpress;
+		$this->divi          = $divi;
+		$this->gitpress      = $gitpress;
+		$this->landing_pages = $landing_pages;
 	}
 
 	public function register_routes( string $namespace ): void {
@@ -43,6 +46,16 @@ class DiviController extends BaseController {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'handle_insert_gitpress' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/divi/pages/create-from-template',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_create_from_template' ),
 				'permission_callback' => array( $this, 'require_signed' ),
 			)
 		);
@@ -161,6 +174,65 @@ class DiviController extends BaseController {
 			),
 			201
 		);
+	}
+
+	public function handle_create_from_template( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
+		}
+
+		$template_id = isset( $body['template_page_id'] ) ? (int) $body['template_page_id'] : 0;
+
+		// Capture before snapshot while template still exists.
+		$template = get_post( $template_id );
+		$before_snapshot = $template ? array(
+			'id'             => $template->ID,
+			'title'          => $template->post_title,
+			'status'         => $template->post_status,
+			'content_length' => strlen( $template->post_content ),
+		) : null;
+
+		$result = $this->landing_pages->create_from_divi_template( $body );
+
+		if ( is_wp_error( $result ) ) {
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'divi_create_from_template',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'message'   => $result->get_error_message(),
+				)
+			);
+			return $result;
+		}
+
+		$after_snapshot = array(
+			'id'     => $result['page_id'],
+			'status' => 'draft',
+		);
+
+		$this->logger->log(
+			'page_created',
+			array(
+				'task_type'       => 'divi_create_from_template',
+				'endpoint'        => $request->get_route(),
+				'method'          => $request->get_method(),
+				'object_type'     => 'page',
+				'object_id'       => $result['page_id'],
+				'before_snapshot' => $before_snapshot,
+				'after_snapshot'  => $after_snapshot,
+				'message'         => sprintf(
+					'divi_from_template: template=%d new_page=%d cm_inserted=%d',
+					$template_id,
+					$result['page_id'],
+					$result['inserted_code_modules']
+				),
+			)
+		);
+
+		return new \WP_REST_Response( $result, 201 );
 	}
 
 	private function build_new_content( string $content, string $shortcode, string $mode, array $placement ): string|\WP_Error {

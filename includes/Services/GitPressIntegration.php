@@ -9,11 +9,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class GitPressIntegration {
 
-	private const SHORTCODE       = 'divi_github_content';
-	private const VALID_FORMATS   = array( 'html', 'markdown', 'text', 'code', 'raw' );
+	private const SHORTCODE     = 'divi_github_content';
+	private const VALID_FORMATS = array( 'html', 'markdown', 'text', 'code', 'raw' );
 
-	// Slug fragments used to identify the GitPress plugin file.
+	// Slug fragments used to identify the GitPress / Divi GitHub Sync plugin file.
 	private const PLUGIN_SLUGS = array( 'gitpress', 'divi-github-sync', 'divi_github' );
+
+	// Meta keys set by the Divi GitHub Sync "GitHub Shortcode" metabox.
+	// These are read from class-page-shortcode-manager.php constants:
+	//   DGS_Page_Shortcode_Manager::META_KEY_SHORTCODE  = '_dgs_page_shortcode'
+	//   DGS_Page_Shortcode_Manager::META_KEY_PLACEMENT  = '_dgs_page_shortcode_placement'
+	//   DGS_Page_Shortcode_Manager::META_KEY_FULL_PAGE  = '_dgs_page_shortcode_full_page'
+	private const DGS_META_SHORTCODE = '_dgs_page_shortcode';
+	private const DGS_META_PLACEMENT = '_dgs_page_shortcode_placement';
+	private const DGS_META_FULL_PAGE = '_dgs_page_shortcode_full_page';
+
+	// Valid placement values accepted by the DGS plugin.
+	private const VALID_PLACEMENTS = array( 'before', 'after', 'replace' );
 
 	public function is_active(): bool {
 		return null !== $this->get_detected_plugin_file();
@@ -105,6 +117,144 @@ class GitPressIntegration {
 		}
 
 		return $usages;
+	}
+
+	// ── Page-level GitPress workflow ──────────────────────────────────────────
+
+	/**
+	 * Create a new draft page and populate its Divi GitHub Sync metabox fields.
+	 * Never publishes. Never edits an existing page.
+	 */
+	public function create_page( array $params ): array|\WP_Error {
+		if ( ! $this->is_shortcode_registered() ) {
+			return new \WP_Error(
+				'broseph_gitpress_inactive',
+				'GitPress is not active or the divi_github_content shortcode is not registered.',
+				array( 'status' => 422 )
+			);
+		}
+
+		$title    = sanitize_text_field( $params['title'] ?? '' );
+		$shortcode = trim( (string) ( $params['shortcode'] ?? '' ) );
+
+		if ( '' === $title ) {
+			return new \WP_Error( 'broseph_bad_request', 'title is required.', array( 'status' => 400 ) );
+		}
+		if ( '' === $shortcode ) {
+			return new \WP_Error( 'broseph_bad_request', 'shortcode is required.', array( 'status' => 400 ) );
+		}
+
+		$validation = $this->validate_shortcode( $shortcode );
+		if ( ! $validation['valid'] ) {
+			return new \WP_Error(
+				'broseph_invalid_shortcode',
+				'Shortcode validation failed: ' . implode( ' ', $validation['errors'] ),
+				array( 'status' => 422 )
+			);
+		}
+
+		$slug      = sanitize_title( $params['slug'] ?? $title );
+		$excerpt   = wp_kses_post( $params['excerpt'] ?? '' );
+		$placement = $this->normalize_placement( (string) ( $params['render_position'] ?? 'after' ) );
+		$full_page = (bool) ( $params['full_page_canvas'] ?? false );
+		$meta      = is_array( $params['meta'] ?? null ) ? $params['meta'] : array();
+
+		$page_id = wp_insert_post(
+			array(
+				'post_title'   => $title,
+				'post_name'    => $slug,
+				'post_excerpt' => $excerpt,
+				'post_content' => '',
+				'post_status'  => 'draft',
+				'post_type'    => 'page',
+			),
+			true
+		);
+
+		if ( is_wp_error( $page_id ) ) {
+			return $page_id;
+		}
+
+		update_post_meta( $page_id, self::DGS_META_SHORTCODE, $shortcode );
+		update_post_meta( $page_id, self::DGS_META_PLACEMENT, $placement );
+
+		if ( $full_page ) {
+			update_post_meta( $page_id, self::DGS_META_FULL_PAGE, '1' );
+		} else {
+			delete_post_meta( $page_id, self::DGS_META_FULL_PAGE );
+		}
+
+		$this->set_seo_meta( $page_id, $meta );
+
+		return array(
+			'status'           => 'draft_created',
+			'page_id'          => $page_id,
+			'preview_url'      => get_preview_post_link( $page_id ),
+			'edit_url'         => admin_url( 'post.php?post=' . $page_id . '&action=edit' ),
+			'shortcode'        => $shortcode,
+			'render_position'  => $placement,
+			'full_page_canvas' => $full_page,
+			'warnings'         => array(),
+		);
+	}
+
+	/**
+	 * Read the Divi GitHub Sync metabox settings for an existing page.
+	 */
+	public function get_page_settings( int $page_id ): array|\WP_Error {
+		$post = get_post( $page_id );
+		if ( ! $post || 'page' !== $post->post_type ) {
+			return new \WP_Error( 'broseph_not_found', 'Page not found.', array( 'status' => 404 ) );
+		}
+
+		$shortcode       = (string) get_post_meta( $page_id, self::DGS_META_SHORTCODE, true );
+		$placement       = (string) get_post_meta( $page_id, self::DGS_META_PLACEMENT, true );
+		$full_page       = '1' === (string) get_post_meta( $page_id, self::DGS_META_FULL_PAGE, true );
+		$has_inline      = str_contains( $post->post_content, '[' . self::SHORTCODE );
+
+		return array(
+			'page_id'                => $page_id,
+			'title'                  => $post->post_title,
+			'shortcode'              => '' !== $shortcode ? $shortcode : null,
+			'render_position'        => '' !== $placement ? $placement : null,
+			'full_page_canvas'       => $full_page,
+			'has_gitpress_shortcode' => '' !== $shortcode || $has_inline,
+			'has_inline_shortcode'   => $has_inline,
+			'preview_url'            => 'draft' === $post->post_status ? get_preview_post_link( $post ) : null,
+			'edit_url'               => admin_url( 'post.php?post=' . $page_id . '&action=edit' ),
+		);
+	}
+
+	// ── Helpers ───────────────────────────────────────────────────────────────
+
+	/**
+	 * Accepts both long-form API values (e.g. "after_content") and native
+	 * DGS plugin values ("before", "after", "replace"). Defaults to "after".
+	 */
+	private function normalize_placement( string $input ): string {
+		$map = array(
+			'before_content'  => 'before',
+			'after_content'   => 'after',
+			'replace_content' => 'replace',
+			'before'          => 'before',
+			'after'           => 'after',
+			'replace'         => 'replace',
+		);
+		return $map[ $input ] ?? 'after';
+	}
+
+	private function set_seo_meta( int $page_id, array $meta ): void {
+		$title = isset( $meta['title'] ) ? sanitize_text_field( (string) $meta['title'] ) : null;
+		$desc  = isset( $meta['description'] ) ? sanitize_text_field( (string) $meta['description'] ) : null;
+
+		if ( null !== $title ) {
+			update_post_meta( $page_id, '_yoast_wpseo_title', $title );
+			update_post_meta( $page_id, 'rank_math_title', $title );
+		}
+		if ( null !== $desc ) {
+			update_post_meta( $page_id, '_yoast_wpseo_metadesc', $desc );
+			update_post_meta( $page_id, 'rank_math_description', $desc );
+		}
 	}
 
 	public function validate_shortcode( string $shortcode ): array {

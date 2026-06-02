@@ -29,6 +29,7 @@ class Plugin {
 		$form_service      = new Services\FormService();
 		$mail_log          = new Services\MailLogService();
 		$mail_test         = new Services\MailTestService();
+		$update_service    = new Services\UpdateService();
 
 		// Admin hub.
 		$admin_menu = new Admin\AdminMenu(
@@ -52,7 +53,8 @@ class Plugin {
 			$report_builder,
 			$form_service,
 			$mail_log,
-			$mail_test
+			$mail_test,
+			$update_service
 		);
 
 		$admin_menu->init();

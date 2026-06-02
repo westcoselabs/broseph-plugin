@@ -54,6 +54,107 @@ class LandingPageService {
 		$this->divi     = $divi;
 	}
 
+	// ── Divi template page creation ──────────────────────────────────────────
+
+	public function create_from_divi_template( array $params ): array|\WP_Error {
+		$template_id = isset( $params['template_page_id'] ) ? (int) $params['template_page_id'] : 0;
+		if ( $template_id <= 0 ) {
+			return new \WP_Error( 'broseph_bad_request', 'template_page_id is required.', array( 'status' => 400 ) );
+		}
+
+		$template = get_post( $template_id );
+		if ( ! $template || 'page' !== $template->post_type ) {
+			return new \WP_Error( 'broseph_not_found', 'Template page not found.', array( 'status' => 404 ) );
+		}
+
+		$title        = sanitize_text_field( $params['title'] ?? '' ) ?: ( $template->post_title . ' (Copy)' );
+		$slug         = sanitize_title( $params['slug'] ?? $title );
+		$excerpt      = wp_kses_post( $params['excerpt'] ?? '' );
+		$replacements = is_array( $params['replacements'] ?? null ) ? $params['replacements'] : array();
+		$meta         = is_array( $params['meta'] ?? null ) ? $params['meta'] : array();
+		$code_modules = is_array( $params['code_modules'] ?? null ) ? $params['code_modules'] : array();
+
+		// Apply placeholder replacements.
+		[ $content, $replaced_tokens, $rep_warnings ] = $this->apply_replacements( $template->post_content, $replacements );
+
+		// Process code modules — v1 supports append mode only.
+		$cm_warnings       = array();
+		$inserted_cm_count = 0;
+
+		foreach ( $code_modules as $cm ) {
+			if ( ! is_array( $cm ) ) {
+				$cm_warnings[] = 'Skipped non-array code_modules entry.';
+				continue;
+			}
+
+			$mode       = sanitize_text_field( (string) ( $cm['mode'] ?? 'append' ) );
+			$cm_content = (string) ( $cm['content'] ?? '' );
+
+			if ( 'append' !== $mode ) {
+				$cm_warnings[] = "Code module mode '{$mode}' is not supported in v1. Only 'append' is supported.";
+				continue;
+			}
+
+			if ( '' === $cm_content ) {
+				$cm_warnings[] = 'Skipped empty code_module content.';
+				continue;
+			}
+
+			$validation = $this->divi->validate_code_module_content( $cm_content );
+			if ( ! $validation['valid'] ) {
+				foreach ( $validation['errors'] as $err ) {
+					$cm_warnings[] = 'Code module rejected: ' . $err;
+				}
+				continue;
+			}
+
+			foreach ( $validation['warnings'] as $w ) {
+				$cm_warnings[] = $w;
+			}
+
+			$content = $this->divi->append_code_module( $content, $cm_content );
+			$inserted_cm_count++;
+		}
+
+		$all_warnings = array_merge( $rep_warnings, $cm_warnings );
+
+		// Insert new draft with final content.
+		$new_id = wp_insert_post(
+			array(
+				'post_title'   => $title,
+				'post_name'    => $slug,
+				'post_content' => $content,
+				'post_excerpt' => $excerpt ?: $template->post_excerpt,
+				'post_status'  => 'draft',
+				'post_type'    => 'page',
+			),
+			true
+		);
+
+		if ( is_wp_error( $new_id ) ) {
+			return $new_id;
+		}
+
+		// Copy page template + Divi builder meta from source.
+		$this->copy_page_setup( $template->ID, $new_id, $content );
+
+		// Update SEO meta.
+		$this->update_seo_meta( $new_id, $meta );
+
+		return array(
+			'status'                => 'draft_created',
+			'page_id'               => $new_id,
+			'preview_url'           => get_preview_post_link( $new_id ),
+			'edit_url'              => admin_url( 'post.php?post=' . $new_id . '&action=edit' ),
+			'divi_builder_active'   => 'on' === get_post_meta( $new_id, '_et_pb_use_builder', true ),
+			'inserted_code_modules' => $inserted_cm_count,
+			'replaced_tokens'       => $replaced_tokens,
+			'warnings'              => $all_warnings,
+		);
+	}
+
+	// ── Existing modes ────────────────────────────────────────────────────────
+
 	public function create( array $params ): array|\WP_Error {
 		$mode = (string) ( $params['mode'] ?? 'template_native' );
 
@@ -234,12 +335,14 @@ class LandingPageService {
 		$strategy = $resolved['strategy'];
 
 		switch ( $strategy ) {
+			// existing_divi_code_module is the new name; existing_divi_injection kept for compat.
+			case 'existing_divi_code_module':
 			case 'existing_divi_injection':
 				$result = $this->handle_divi_injection( $params );
 				if ( is_wp_error( $result ) ) {
 					return $result;
 				}
-				$result['auto_strategy']        = 'existing_divi_injection';
+				$result['auto_strategy']        = $strategy;
 				$result['auto_strategy_reason'] = $resolved['reason'];
 				return $result;
 
@@ -251,6 +354,8 @@ class LandingPageService {
 				$result['auto_strategy_reason'] = $resolved['reason'];
 				return $result;
 
+			// divi_template is the new name for template_native.
+			case 'divi_template':
 			case 'template_native':
 				$result = $this->create_native( $params );
 				if ( is_wp_error( $result ) ) {
@@ -261,11 +366,35 @@ class LandingPageService {
 
 			case 'proposal_only':
 				return array(
-					'status'              => 'proposal_only',
-					'strategy'            => 'proposal_only',
+					'status'               => 'proposal_only',
+					'strategy'             => 'proposal_only',
 					'auto_strategy_reason' => $resolved['reason'],
-					'warnings'            => $resolved['warnings'],
-					'requires_approval'   => true,
+					'warnings'             => $resolved['warnings'],
+					'requires_approval'    => true,
+				);
+
+			// gitpress_canvas and native_draft require dedicated endpoints —
+			// return a redirect hint so Open Claw uses the correct route.
+			case 'gitpress_canvas':
+				return array(
+					'status'               => 'redirect',
+					'strategy'             => 'gitpress_canvas',
+					'endpoint'             => '/broseph/v1/gitpress/pages/create',
+					'auto_strategy_reason' => $resolved['reason'],
+					'message'              => 'Use POST /broseph/v1/gitpress/pages/create for GitPress Canvas pages.',
+					'warnings'             => $resolved['warnings'],
+					'requires_approval'    => false,
+				);
+
+			case 'native_draft':
+				return array(
+					'status'               => 'redirect',
+					'strategy'             => 'native_draft',
+					'endpoint'             => '/broseph/v1/pages/create-draft',
+					'auto_strategy_reason' => $resolved['reason'],
+					'message'              => 'Use POST /broseph/v1/pages/create-draft for a plain draft page.',
+					'warnings'             => $resolved['warnings'],
+					'requires_approval'    => false,
 				);
 
 			default:

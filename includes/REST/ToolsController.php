@@ -45,8 +45,9 @@ class ToolsController extends BaseController {
 			)
 		);
 
-		$gp_available = $this->gitpress->is_active() && $this->gitpress->is_shortcode_registered();
-		$divi_active  = $this->divi->is_divi_active();
+		$gp_available    = $this->gitpress->is_active() && $this->gitpress->is_shortcode_registered();
+		$divi_active     = $this->divi->is_divi_active();
+		$updates_allowed = (bool) get_option( 'broseph_allow_plugin_theme_updates', false );
 
 		return new \WP_REST_Response(
 			array(
@@ -55,14 +56,15 @@ class ToolsController extends BaseController {
 				'context'   => array(
 					'gitpress_available' => $gp_available,
 					'divi_active'        => $divi_active,
+					'updates_allowed'    => $updates_allowed,
 				),
-				'tools'     => $this->build_manifest( $gp_available, $divi_active ),
+				'tools'     => $this->build_manifest( $gp_available, $divi_active, $updates_allowed ),
 			),
 			200
 		);
 	}
 
-	private function build_manifest( bool $gp, bool $divi ): array {
+	private function build_manifest( bool $gp, bool $divi, bool $updates_allowed = false ): array {
 		return array(
 			array(
 				'name'              => 'get_status',
@@ -131,7 +133,7 @@ class ToolsController extends BaseController {
 			),
 			array(
 				'name'              => 'create_landing_page',
-				'description'       => 'Create a landing page draft from a template in native, GitPress, or auto mode.',
+				'description'       => 'Legacy combined landing page creator (native/GitPress template modes). For new AI-generated pages, prefer create_gitpress_page or create_divi_page_from_template instead.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/landing-pages/create',
 				'risk_level'        => 'draft_mutation',
@@ -144,7 +146,7 @@ class ToolsController extends BaseController {
 			),
 			array(
 				'name'              => 'resolve_content_strategy',
-				'description'       => 'Ask Broseph which content strategy to use for a landing page task.',
+				'description'       => 'Ask Broseph which page creation strategy to use. Returns the recommended strategy, the exact endpoint to call next, and what dependencies are required. Call this before creating any page if you are unsure which workflow to use.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/content/resolve-strategy',
 				'risk_level'        => 'read_only',
@@ -152,8 +154,8 @@ class ToolsController extends BaseController {
 				'requires_gitpress' => false,
 				'requires_divi'     => false,
 				'available'         => true,
-				'input_schema'      => array( 'task_type', 'preferred_mode', 'page_id', 'template_page_id', 'risk_tolerance', 'requires_gitpress' ),
-				'output_schema'     => array( 'strategy', 'reason', 'requires_github_files', 'requires_approval', 'warnings' ),
+				'input_schema'      => array( 'task_type', 'preferred_mode', 'page_id', 'template_page_id', 'risk_tolerance', 'requires_gitpress', 'requires_divi_layout' ),
+				'output_schema'     => array( 'strategy', 'endpoint', 'reason', 'requires_github_files', 'requires_divi', 'requires_gitpress', 'requires_existing_page', 'requires_template_page', 'requires_approval', 'warnings' ),
 			),
 			array(
 				'name'              => 'get_gitpress_status',
@@ -195,6 +197,32 @@ class ToolsController extends BaseController {
 				'output_schema'     => array( 'valid', 'errors' ),
 			),
 			array(
+				'name'              => 'create_gitpress_page',
+				'description'       => 'Default for new AI-generated landing pages. Creates a draft page using GitPress page-level shortcode/full-page canvas. Does not use Divi Builder. Call resolve_content_strategy first if unsure.',
+				'method'            => 'POST',
+				'endpoint'          => '/broseph/v1/gitpress/pages/create',
+				'risk_level'        => 'draft_mutation',
+				'requires_approval' => false,
+				'requires_gitpress' => true,
+				'requires_divi'     => false,
+				'available'         => $gp,
+				'input_schema'      => array( 'title', 'slug', 'excerpt', 'shortcode', 'render_position', 'full_page_canvas', 'meta' ),
+				'output_schema'     => array( 'status', 'page_id', 'preview_url', 'edit_url', 'shortcode', 'render_position', 'full_page_canvas', 'warnings' ),
+			),
+			array(
+				'name'              => 'get_gitpress_page_settings',
+				'description'       => 'Read the GitPress page-level shortcode/metabox settings for a given page.',
+				'method'            => 'GET',
+				'endpoint'          => '/broseph/v1/gitpress/pages/{id}',
+				'risk_level'        => 'read_only',
+				'requires_approval' => false,
+				'requires_gitpress' => false,
+				'requires_divi'     => false,
+				'available'         => true,
+				'input_schema'      => array( 'id' ),
+				'output_schema'     => array( 'page_id', 'title', 'shortcode', 'render_position', 'full_page_canvas', 'has_gitpress_shortcode', 'preview_url', 'edit_url' ),
+			),
+			array(
 				'name'              => 'get_divi_page_summary',
 				'description'       => 'Parse and summarize the Divi module structure of a page.',
 				'method'            => 'GET',
@@ -209,7 +237,7 @@ class ToolsController extends BaseController {
 			),
 			array(
 				'name'              => 'insert_gitpress_code_module',
-				'description'       => 'Insert a [divi_github_content] shortcode into a Divi Code Module.',
+				'description'       => 'Use only for adding GitPress content to an existing Divi page. Inserts a [divi_github_content] shortcode as a Divi Code Module. Do not use this for brand-new pages — use create_gitpress_page instead.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/divi/code-module/insert-gitpress',
 				'risk_level'        => 'draft_mutation',
@@ -297,6 +325,58 @@ class ToolsController extends BaseController {
 				'available'         => true,
 				'input_schema'      => array( 'limit' ),
 				'output_schema'     => array( 'supported', 'source_plugin', 'logs', 'message' ),
+			),
+			array(
+				'name'              => 'create_divi_page_from_template',
+				'description'       => 'Use when a new page must clone an existing Divi layout/template. Copies Divi content, applies placeholder replacements, preserves Divi Builder activation, and optionally appends Code Modules.',
+				'method'            => 'POST',
+				'endpoint'          => '/broseph/v1/divi/pages/create-from-template',
+				'risk_level'        => 'draft_mutation',
+				'requires_approval' => false,
+				'requires_gitpress' => false,
+				'requires_divi'     => true,
+				'available'         => $divi,
+				'input_schema'      => array( 'template_page_id', 'title', 'slug', 'excerpt', 'replacements', 'meta', 'code_modules' ),
+				'output_schema'     => array( 'status', 'page_id', 'preview_url', 'edit_url', 'divi_builder_active', 'inserted_code_modules', 'replaced_tokens', 'warnings' ),
+			),
+			array(
+				'name'              => 'check_updates',
+				'description'       => 'Read-only check for available plugin and theme updates. Does not apply any updates.',
+				'method'            => 'GET',
+				'endpoint'          => '/broseph/v1/updates',
+				'risk_level'        => 'read_only',
+				'requires_approval' => false,
+				'requires_gitpress' => false,
+				'requires_divi'     => false,
+				'available'         => true,
+				'input_schema'      => array(),
+				'output_schema'     => array( 'plugins', 'themes', 'updates_allowed', 'notes' ),
+			),
+			array(
+				'name'              => 'update_selected_plugins',
+				'description'       => 'Update explicitly named plugins by file path. Requires broseph_allow_plugin_theme_updates enabled, confirm token, and explicit plugin_files list. Broseph itself is always skipped.',
+				'method'            => 'POST',
+				'endpoint'          => '/broseph/v1/updates/plugins/update-selected',
+				'risk_level'        => 'risky_mutation',
+				'requires_approval' => true,
+				'requires_gitpress' => false,
+				'requires_divi'     => false,
+				'available'         => $updates_allowed,
+				'input_schema'      => array( 'plugin_files', 'confirm', 'allow_inactive' ),
+				'output_schema'     => array( 'results', 'summary' ),
+			),
+			array(
+				'name'              => 'update_selected_themes',
+				'description'       => 'Update explicitly named themes by slug. Requires broseph_allow_plugin_theme_updates enabled, confirm token, and explicit themes list. Active theme skipped unless allow_active_theme: true.',
+				'method'            => 'POST',
+				'endpoint'          => '/broseph/v1/updates/themes/update-selected',
+				'risk_level'        => 'risky_mutation',
+				'requires_approval' => true,
+				'requires_gitpress' => false,
+				'requires_divi'     => false,
+				'available'         => $updates_allowed,
+				'input_schema'      => array( 'themes', 'confirm', 'allow_active_theme' ),
+				'output_schema'     => array( 'results', 'summary' ),
 			),
 		);
 	}

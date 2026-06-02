@@ -119,6 +119,33 @@ class DiviService {
 	}
 
 	/**
+	 * Validates raw code module content before it is saved into a Divi Code Module.
+	 * Blocks PHP and (optionally) script tags.
+	 */
+	public function validate_code_module_content( string $content ): array {
+		$errors   = array();
+		$warnings = array();
+
+		if ( preg_match( '/(<\?(?:php|=)|<%)/', $content ) ) {
+			$errors[] = 'PHP code is not allowed in code module content.';
+		}
+
+		if ( preg_match( '/<script[\s>]/i', $content ) ) {
+			if ( ! (bool) get_option( 'broseph_allow_js_snippets', false ) ) {
+				$errors[] = 'Script tags are not allowed. Enable Allow JS Snippets in Broseph Settings to permit them.';
+			} else {
+				$warnings[] = 'Script tags detected. Allowed by JS snippets setting.';
+			}
+		}
+
+		return array(
+			'valid'    => empty( $errors ),
+			'errors'   => $errors,
+			'warnings' => $warnings,
+		);
+	}
+
+	/**
 	 * Append a GitPress shortcode inside a new et_pb_code module at the end of
 	 * the page's Divi content. Returns the modified content string.
 	 */

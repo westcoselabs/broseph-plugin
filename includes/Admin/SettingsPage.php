@@ -47,6 +47,16 @@ class SettingsPage {
 			)
 		);
 
+		register_setting(
+			self::OPTION_GROUP,
+			'broseph_allow_plugin_theme_updates',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => array( $this, 'sanitize_checkbox' ),
+				'default'           => false,
+			)
+		);
+
 		add_settings_section(
 			'broseph_toggles',
 			__( 'Safety & Behavior Toggles', 'broseph' ),
@@ -80,6 +90,18 @@ class SettingsPage {
 			'broseph_toggles',
 			array( 'option' => 'broseph_prefer_gitpress_landing_pages' )
 		);
+
+		add_settings_field(
+			'broseph_allow_plugin_theme_updates',
+			__( 'Allow Plugin/Theme Updates', 'broseph' ),
+			array( $this, 'render_checkbox_field' ),
+			self::PAGE_SLUG,
+			'broseph_toggles',
+			array(
+				'option'      => 'broseph_allow_plugin_theme_updates',
+				'description' => __( 'When disabled, Open Claw can check updates but cannot apply plugin or theme updates.', 'broseph' ),
+			)
+		);
 	}
 
 	public function render_page(): void {
@@ -107,13 +129,17 @@ class SettingsPage {
 	}
 
 	public function render_checkbox_field( array $args ): void {
-		$option  = $args['option'];
-		$checked = checked( '1', get_option( $option ), false );
+		$option      = $args['option'];
+		$description = $args['description'] ?? '';
+		$checked     = checked( '1', get_option( $option ), false );
 		printf(
 			'<input type="checkbox" id="%1$s" name="%1$s" value="1" %2$s>',
 			esc_attr( $option ),
 			$checked
 		);
+		if ( $description ) {
+			printf( '<p class="description">%s</p>', esc_html( $description ) );
+		}
 	}
 
 	public function sanitize_checkbox( mixed $value ): string {

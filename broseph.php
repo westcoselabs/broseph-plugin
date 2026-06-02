@@ -51,6 +51,7 @@ require_once BROSEPH_PLUGIN_DIR . 'includes/REST/LandingPagesController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/ReportsController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/FormsController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/MailController.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/REST/UpdatesController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/ToolsController.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/REST/Routes.php';
 
@@ -65,6 +66,7 @@ require_once BROSEPH_PLUGIN_DIR . 'includes/Services/ReportBuilder.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/FormService.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/MailLogService.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/MailTestService.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/Services/UpdateService.php';
 
 // Plugin bootstrap.
 require_once BROSEPH_PLUGIN_DIR . 'includes/Plugin.php';

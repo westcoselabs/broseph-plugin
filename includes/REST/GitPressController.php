@@ -63,6 +63,29 @@ class GitPressController extends BaseController {
 				'permission_callback' => array( $this, 'require_signed' ),
 			)
 		);
+
+		register_rest_route(
+			$namespace,
+			'/gitpress/pages/create',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_create_page' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/gitpress/pages/(?P<id>\d+)',
+			array(
+				'methods'             => \WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'handle_get_page_settings' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+				'args'                => array(
+					'id' => array( 'required' => true, 'type' => 'integer', 'minimum' => 1 ),
+				),
+			)
+		);
 	}
 
 	public function handle_status( \WP_REST_Request $request ): \WP_REST_Response {
@@ -110,6 +133,60 @@ class GitPressController extends BaseController {
 
 		$this->log_accepted( $request, 'gitpress_validate_shortcode' );
 		$result = $this->gitpress->validate_shortcode( (string) $shortcode );
+
+		return new \WP_REST_Response( $result, 200 );
+	}
+
+	public function handle_create_page( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
+		}
+
+		$result = $this->gitpress->create_page( $body );
+
+		if ( is_wp_error( $result ) ) {
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'gitpress_page_create',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'message'   => $result->get_error_message(),
+				)
+			);
+			return $result;
+		}
+
+		$this->logger->log(
+			'page_created',
+			array(
+				'task_type'      => 'gitpress_page_create',
+				'endpoint'       => $request->get_route(),
+				'method'         => $request->get_method(),
+				'object_type'    => 'page',
+				'object_id'      => $result['page_id'],
+				'after_snapshot' => array(
+					'id'               => $result['page_id'],
+					'status'           => 'draft',
+					'render_position'  => $result['render_position'],
+					'full_page_canvas' => $result['full_page_canvas'],
+				),
+			)
+		);
+
+		return new \WP_REST_Response( $result, 201 );
+	}
+
+	public function handle_get_page_settings( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		$id     = (int) $request->get_param( 'id' );
+		$result = $this->gitpress->get_page_settings( $id );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$this->log_accepted( $request, 'gitpress_page_settings', 'page', $id );
 
 		return new \WP_REST_Response( $result, 200 );
 	}
