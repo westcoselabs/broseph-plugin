@@ -24,6 +24,22 @@ class LandingPageService {
 
 	private const SAFE_MODES = array( 'template_native', 'template_gitpress', 'auto' );
 
+	private const DIVI_META = array(
+		'_et_pb_use_builder',
+		'_et_pb_old_content',
+		'_et_pb_page_layout',
+		'_et_pb_side_nav',
+		'_et_pb_post_hide_nav',
+		'_et_pb_show_title',
+		'_et_builder_version',
+		'_et_pb_built_for_post_type',
+		'_et_pb_custom_css',
+		'_et_pb_light_text_color',
+		'_et_pb_dark_text_color',
+		'_et_pb_content_area_background_color',
+		'_et_pb_section_background_color',
+	);
+
 	private GitPressIntegration $gitpress;
 	private ContentStrategyResolver $resolver;
 	private DiviService $divi;
@@ -76,7 +92,7 @@ class LandingPageService {
 			return $new_id;
 		}
 
-		$this->copy_page_setup( $template->ID, $new_id );
+		$this->copy_page_setup( $template->ID, $new_id, $new_content );
 		$this->update_seo_meta( $new_id, $meta );
 
 		return array(
@@ -184,7 +200,7 @@ class LandingPageService {
 			return $new_id;
 		}
 
-		$this->copy_page_setup( $template->ID, $new_id );
+		$this->copy_page_setup( $template->ID, $new_id, $content );
 		$this->update_seo_meta( $new_id, $meta );
 
 		return array(
@@ -382,10 +398,26 @@ class LandingPageService {
 		}
 	}
 
-	private function copy_page_setup( int $source_id, int $new_id ): void {
+	private function copy_page_setup( int $source_id, int $new_id, string $new_content = '' ): void {
 		$template = get_post_meta( $source_id, '_wp_page_template', true );
 		if ( $template ) {
 			update_post_meta( $new_id, '_wp_page_template', $template );
+		}
+		$this->copy_builder_meta( $source_id, $new_id, $new_content );
+	}
+
+	private function copy_builder_meta( int $source_id, int $target_id, string $source_content = '' ): void {
+		foreach ( self::DIVI_META as $key ) {
+			$value = get_post_meta( $source_id, $key, true );
+			if ( '' !== $value ) {
+				update_post_meta( $target_id, $key, $value );
+			}
+		}
+
+		$content = $source_content ?: (string) get_post_field( 'post_content', $source_id );
+		if ( str_contains( $content, '[et_pb_section' ) ) {
+			update_post_meta( $target_id, '_et_pb_use_builder', 'on' );
+			update_post_meta( $target_id, '_et_pb_built_for_post_type', 'page' );
 		}
 	}
 

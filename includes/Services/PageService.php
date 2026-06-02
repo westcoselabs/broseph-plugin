@@ -32,6 +32,23 @@ class PageService {
 	// Meta keys never copied on duplicate.
 	private const BLOCKED_META = array( '_edit_lock', '_edit_last', '_wp_old_slug', '_pingme', '_encloseme' );
 
+	// Divi builder meta keys to copy when duplicating.
+	private const DIVI_META = array(
+		'_et_pb_use_builder',
+		'_et_pb_old_content',
+		'_et_pb_page_layout',
+		'_et_pb_side_nav',
+		'_et_pb_post_hide_nav',
+		'_et_pb_show_title',
+		'_et_builder_version',
+		'_et_pb_built_for_post_type',
+		'_et_pb_custom_css',
+		'_et_pb_light_text_color',
+		'_et_pb_dark_text_color',
+		'_et_pb_content_area_background_color',
+		'_et_pb_section_background_color',
+	);
+
 	public function get_pages( array $params = array() ): array {
 		$status_raw  = $params['status'] ?? 'publish,draft,pending,private';
 		$statuses    = array_filter( array_map( 'trim', explode( ',', $status_raw ) ) );
@@ -158,7 +175,24 @@ class PageService {
 			}
 		}
 
+		$this->copy_builder_meta( $source_id, $new_id, $source->post_content );
+
 		return $new_id;
+	}
+
+	private function copy_builder_meta( int $source_id, int $target_id, string $source_content = '' ): void {
+		foreach ( self::DIVI_META as $key ) {
+			$value = get_post_meta( $source_id, $key, true );
+			if ( '' !== $value ) {
+				update_post_meta( $target_id, $key, $value );
+			}
+		}
+
+		$content = $source_content ?: (string) get_post_field( 'post_content', $source_id );
+		if ( str_contains( $content, '[et_pb_section' ) ) {
+			update_post_meta( $target_id, '_et_pb_use_builder', 'on' );
+			update_post_meta( $target_id, '_et_pb_built_for_post_type', 'page' );
+		}
 	}
 
 	private function format_page_summary( \WP_Post $post ): array {
