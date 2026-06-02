@@ -26,6 +26,9 @@ class Plugin {
 		$strategy_resolver = new Services\ContentStrategyResolver( $gitpress, $divi_service, $page_service );
 		$landing_pages     = new Services\LandingPageService( $gitpress, $strategy_resolver, $divi_service );
 		$report_builder    = new Services\ReportBuilder( $scanner, $gitpress, $log_repo, $report_repo );
+		$form_service      = new Services\FormService();
+		$mail_log          = new Services\MailLogService();
+		$mail_test         = new Services\MailTestService();
 
 		// Admin hub.
 		$admin_menu = new Admin\AdminMenu(
@@ -46,7 +49,10 @@ class Plugin {
 			$divi_service,
 			$strategy_resolver,
 			$landing_pages,
-			$report_builder
+			$report_builder,
+			$form_service,
+			$mail_log,
+			$mail_test
 		);
 
 		$admin_menu->init();

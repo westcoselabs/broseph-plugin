@@ -191,6 +191,21 @@ class DashboardPage {
 							<?php // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 							<?php echo $gitpress_active ? $this->badge( 'success', __( 'Available', 'broseph' ) ) : $this->badge( 'default', __( 'Unavailable', 'broseph' ) ); ?>
 						</dd>
+						<dt><?php esc_html_e( 'Form Discovery', 'broseph' ); ?></dt>
+						<dd>
+							<?php // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<?php echo $this->badge( 'success', __( 'Available', 'broseph' ) ); ?>
+						</dd>
+						<dt><?php esc_html_e( 'Mail Test Endpoint', 'broseph' ); ?></dt>
+						<dd>
+							<?php // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<?php echo $this->badge( 'success', __( 'Available', 'broseph' ) ); ?>
+						</dd>
+						<dt><?php esc_html_e( 'Form Submission Test', 'broseph' ); ?></dt>
+						<dd>
+							<?php // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<?php echo $this->badge( 'pending', __( 'Adapter-based', 'broseph' ) ); ?>
+						</dd>
 					</dl>
 				</div>
 

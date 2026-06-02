@@ -20,6 +20,9 @@ class Routes {
 	private \Broseph\Services\ContentStrategyResolver $strategy;
 	private \Broseph\Services\LandingPageService $landing_pages;
 	private \Broseph\Services\ReportBuilder $report_builder;
+	private \Broseph\Services\FormService $form_service;
+	private \Broseph\Services\MailLogService $mail_log;
+	private \Broseph\Services\MailTestService $mail_test;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
@@ -30,7 +33,10 @@ class Routes {
 		\Broseph\Services\DiviService $divi,
 		\Broseph\Services\ContentStrategyResolver $strategy,
 		\Broseph\Services\LandingPageService $landing_pages,
-		\Broseph\Services\ReportBuilder $report_builder
+		\Broseph\Services\ReportBuilder $report_builder,
+		\Broseph\Services\FormService $form_service,
+		\Broseph\Services\MailLogService $mail_log,
+		\Broseph\Services\MailTestService $mail_test
 	) {
 		$this->signer         = $signer;
 		$this->logger         = $logger;
@@ -41,6 +47,9 @@ class Routes {
 		$this->strategy       = $strategy;
 		$this->landing_pages  = $landing_pages;
 		$this->report_builder = $report_builder;
+		$this->form_service   = $form_service;
+		$this->mail_log       = $mail_log;
+		$this->mail_test      = $mail_test;
 	}
 
 	public function init(): void {
@@ -88,6 +97,8 @@ class Routes {
 		( new DiviController( $this->signer, $this->logger, $this->divi, $this->gitpress ) )->register_routes( self::NAMESPACE );
 		( new LandingPagesController( $this->signer, $this->logger, $this->landing_pages ) )->register_routes( self::NAMESPACE );
 		( new ReportsController( $this->signer, $this->logger, $this->report_builder ) )->register_routes( self::NAMESPACE );
+		( new FormsController( $this->signer, $this->logger, $this->form_service ) )->register_routes( self::NAMESPACE );
+		( new MailController( $this->signer, $this->logger, $this->mail_test, $this->mail_log ) )->register_routes( self::NAMESPACE );
 		( new ToolsController( $this->signer, $this->logger, $this->gitpress, $this->divi ) )->register_routes( self::NAMESPACE );
 	}
 
