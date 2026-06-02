@@ -364,11 +364,23 @@ class FormService {
 						$required = true;
 					}
 
+					// Extract field identifiers used to build the AJAX submission POST key.
+					$field_id        = null;
+					$custom_field_id = null;
+					if ( preg_match( '/\bfield_id="([^"]*)"/', $fa, $fid ) ) {
+						$field_id = $fid[1];
+					}
+					if ( preg_match( '/\bcustom_field_id="([^"]*)"/', $fa, $cfid ) ) {
+						$custom_field_id = $cfid[1];
+					}
+
 					if ( $field_label ) {
 						$fields[] = array(
-							'label'    => $field_label,
-							'type'     => $field_type,
-							'required' => $required,
+							'label'          => $field_label,
+							'type'           => $field_type,
+							'required'       => $required,
+							'field_id'       => $field_id,
+							'custom_field_id' => $custom_field_id,
 						);
 					}
 				}
@@ -524,6 +536,17 @@ class FormService {
 		return $results;
 	}
 
+	/**
+	 * Returns true only for form types where a submission adapter is available
+	 * and its prerequisite AJAX handler is registered by the form plugin.
+	 */
+	private function is_test_supported( string $form_type ): bool {
+		if ( 'divi_contact_form' === $form_type ) {
+			return has_action( 'wp_ajax_nopriv_et_pb_contact_form_submit' );
+		}
+		return false;
+	}
+
 	private function make_form_entry(
 		string $form_type,
 		?int $form_id,
@@ -542,7 +565,7 @@ class FormService {
 			'page_url'           => $page_url,
 			'title'              => $title,
 			'detected_fields'    => $detected_fields,
-			'test_supported'     => false,
+			'test_supported'     => $this->is_test_supported( $form_type ),
 			'mail_test_supported' => true,
 			'warnings'           => $warnings,
 		);

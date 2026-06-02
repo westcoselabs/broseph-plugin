@@ -64,6 +64,7 @@ require_once BROSEPH_PLUGIN_DIR . 'includes/Services/ContentStrategyResolver.php
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/LandingPageService.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/ReportBuilder.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/FormService.php';
+require_once BROSEPH_PLUGIN_DIR . 'includes/Services/DiviContactFormTestAdapter.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/MailLogService.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/MailTestService.php';
 require_once BROSEPH_PLUGIN_DIR . 'includes/Services/UpdateService.php';

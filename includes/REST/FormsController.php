@@ -10,14 +10,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 class FormsController extends BaseController {
 
 	private \Broseph\Services\FormService $forms;
+	private \Broseph\Services\DiviContactFormTestAdapter $divi_form_test;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
 		\Broseph\Logging\ActionLogger $logger,
-		\Broseph\Services\FormService $forms
+		\Broseph\Services\FormService $forms,
+		\Broseph\Services\DiviContactFormTestAdapter $divi_form_test
 	) {
 		parent::__construct( $signer, $logger );
-		$this->forms = $forms;
+		$this->forms          = $forms;
+		$this->divi_form_test = $divi_form_test;
 	}
 
 	public function register_routes( string $namespace ): void {
@@ -96,15 +99,32 @@ class FormsController extends BaseController {
 			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
 		}
 
-		$result = $this->forms->get_test_info( $body );
+		$form_type = (string) ( $body['form_type'] ?? '' );
+		$page_id   = isset( $body['page_id'] ) ? (int) $body['page_id'] : 0;
 
+		// Dispatch to Divi adapter when form_type and page_id are both provided.
+		if ( 'divi_contact_form' === $form_type && $page_id > 0 ) {
+			$forms_on_page = $this->forms->get_forms_on_page( $page_id );
+			$result        = $this->divi_form_test->run_test( $body, $forms_on_page );
+		} else {
+			$result = $this->forms->get_test_info( $body );
+		}
+
+		// Log attempt — never log body content or full email addresses.
 		$this->logger->log(
 			'accepted',
 			array(
-				'task_type'  => 'form_test_requested',
-				'endpoint'   => $request->get_route(),
-				'method'     => $request->get_method(),
-				'message'    => 'form_test: unsupported in v1 for form_type=' . ( $body['form_type'] ?? 'unknown' ),
+				'task_type'   => 'form_test_requested',
+				'endpoint'    => $request->get_route(),
+				'method'      => $request->get_method(),
+				'object_type' => 'page',
+				'object_id'   => $page_id ?: null,
+				'message'     => sprintf(
+					'form_test: form_type=%s page_id=%d status=%s',
+					$form_type ?: 'unknown',
+					$page_id,
+					$result['status'] ?? 'unknown'
+				),
 			)
 		);
 

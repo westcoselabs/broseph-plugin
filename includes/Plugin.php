@@ -27,6 +27,7 @@ class Plugin {
 		$landing_pages     = new Services\LandingPageService( $gitpress, $strategy_resolver, $divi_service );
 		$report_builder    = new Services\ReportBuilder( $scanner, $gitpress, $log_repo, $report_repo );
 		$form_service      = new Services\FormService();
+		$divi_form_test    = new Services\DiviContactFormTestAdapter();
 		$mail_log          = new Services\MailLogService();
 		$mail_test         = new Services\MailTestService();
 		$update_service    = new Services\UpdateService();
@@ -52,6 +53,7 @@ class Plugin {
 			$landing_pages,
 			$report_builder,
 			$form_service,
+			$divi_form_test,
 			$mail_log,
 			$mail_test,
 			$update_service
