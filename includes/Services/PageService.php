@@ -9,6 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class PageService {
 
+	private const BULK_LIMIT = 25;
+	private const PUBLISHABLE_STATUSES = array( 'draft', 'pending' );
+	private const TRASHABLE_STATUSES = array( 'draft', 'pending' );
+
 	// Meta keys that are safe to copy when duplicating a page.
 	private const SAFE_COPY_META = array( '_wp_page_template' );
 
@@ -180,6 +184,214 @@ class PageService {
 		return $new_id;
 	}
 
+	public function publish_page( int $page_id, ?string $expected_current_status = null ): array|\WP_Error {
+		$post = $this->get_mutable_page( $page_id );
+		if ( is_wp_error( $post ) ) {
+			return $post;
+		}
+
+		$previous_status = $post->post_status;
+
+		if ( null !== $expected_current_status ) {
+			$expected = sanitize_key( $expected_current_status );
+			if ( $expected !== $previous_status ) {
+				return new \WP_Error(
+					'broseph_status_conflict',
+					'The page status did not match expected_current_status.',
+					array(
+						'status'           => 409,
+						'page_id'          => $page_id,
+						'expected_status'  => $expected,
+						'current_status'   => $previous_status,
+					)
+				);
+			}
+		}
+
+		if ( 'publish' === $previous_status ) {
+			return array(
+				'status'          => 'already_published',
+				'page_id'         => $page_id,
+				'previous_status' => $previous_status,
+				'new_status'      => $previous_status,
+				'permalink'       => get_permalink( $post ),
+				'warnings'        => array(),
+			);
+		}
+
+		if ( ! in_array( $previous_status, self::PUBLISHABLE_STATUSES, true ) ) {
+			return new \WP_Error(
+				'broseph_invalid_status',
+				'Only draft and pending pages can be published.',
+				array(
+					'status'          => 400,
+					'page_id'         => $page_id,
+					'current_status'  => $previous_status,
+				)
+			);
+		}
+
+		$result = wp_update_post(
+			array(
+				'ID'          => $page_id,
+				'post_status' => 'publish',
+			),
+			true
+		);
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$updated_post = get_post( $page_id );
+		$new_status   = $updated_post ? $updated_post->post_status : 'publish';
+
+		return array(
+			'status'          => 'published',
+			'page_id'         => $page_id,
+			'previous_status' => $previous_status,
+			'new_status'      => $new_status,
+			'permalink'       => $updated_post ? get_permalink( $updated_post ) : get_permalink( $page_id ),
+			'warnings'        => array(),
+		);
+	}
+
+	public function bulk_publish_pages( array $page_ids ): array|\WP_Error {
+		$normalized = $this->normalize_bulk_page_ids( $page_ids );
+		if ( is_wp_error( $normalized ) ) {
+			return $normalized;
+		}
+
+		$results = array();
+		$summary = array(
+			'requested' => count( $normalized ),
+			'published' => 0,
+			'failed'    => 0,
+			'skipped'   => 0,
+		);
+
+		foreach ( $normalized as $page_id ) {
+			$result = $this->publish_page( $page_id );
+			if ( is_wp_error( $result ) ) {
+				$summary['failed']++;
+				$results[] = array(
+					'page_id' => $page_id,
+					'status'  => 'failed',
+					'code'    => $result->get_error_code(),
+					'message' => $result->get_error_message(),
+					'data'    => $result->get_error_data(),
+				);
+				continue;
+			}
+
+			if ( 'published' === $result['status'] ) {
+				$summary['published']++;
+			} else {
+				$summary['skipped']++;
+			}
+
+			$results[] = $result;
+		}
+
+		return array(
+			'summary'  => $summary,
+			'results'  => $results,
+			'warnings' => array(),
+		);
+	}
+
+	public function trash_draft_page( int $page_id ): array|\WP_Error {
+		$post = $this->get_mutable_page( $page_id );
+		if ( is_wp_error( $post ) ) {
+			return $post;
+		}
+
+		$previous_status = $post->post_status;
+
+		if ( 'trash' === $previous_status ) {
+			return array(
+				'status'          => 'already_trashed',
+				'page_id'         => $page_id,
+				'previous_status' => $previous_status,
+				'new_status'      => $previous_status,
+			);
+		}
+
+		if ( ! in_array( $previous_status, self::TRASHABLE_STATUSES, true ) ) {
+			return new \WP_Error(
+				'broseph_invalid_status',
+				'Only draft and pending pages can be trashed.',
+				array(
+					'status'         => 400,
+					'page_id'        => $page_id,
+					'current_status' => $previous_status,
+				)
+			);
+		}
+
+		$result = wp_trash_post( $page_id );
+		if ( false === $result ) {
+			return new \WP_Error(
+				'broseph_trash_failed',
+				'WordPress could not trash the page.',
+				array( 'status' => 500, 'page_id' => $page_id )
+			);
+		}
+
+		$updated_post = get_post( $page_id );
+
+		return array(
+			'status'          => 'trashed',
+			'page_id'         => $page_id,
+			'previous_status' => $previous_status,
+			'new_status'      => $updated_post ? $updated_post->post_status : 'trash',
+		);
+	}
+
+	public function bulk_trash_pages( array $page_ids ): array|\WP_Error {
+		$normalized = $this->normalize_bulk_page_ids( $page_ids );
+		if ( is_wp_error( $normalized ) ) {
+			return $normalized;
+		}
+
+		$results = array();
+		$summary = array(
+			'requested' => count( $normalized ),
+			'trashed'   => 0,
+			'failed'    => 0,
+			'skipped'   => 0,
+		);
+
+		foreach ( $normalized as $page_id ) {
+			$result = $this->trash_draft_page( $page_id );
+			if ( is_wp_error( $result ) ) {
+				$summary['failed']++;
+				$results[] = array(
+					'page_id' => $page_id,
+					'status'  => 'failed',
+					'code'    => $result->get_error_code(),
+					'message' => $result->get_error_message(),
+					'data'    => $result->get_error_data(),
+				);
+				continue;
+			}
+
+			if ( 'trashed' === $result['status'] ) {
+				$summary['trashed']++;
+			} else {
+				$summary['skipped']++;
+			}
+
+			$results[] = $result;
+		}
+
+		return array(
+			'summary'  => $summary,
+			'results'  => $results,
+			'warnings' => array(),
+		);
+	}
+
 	private function copy_builder_meta( int $source_id, int $target_id, string $source_content = '' ): void {
 		foreach ( self::DIVI_META as $key ) {
 			$value = get_post_meta( $source_id, $key, true );
@@ -256,5 +468,48 @@ class PageService {
 			'content_length' => strlen( $post->post_content ),
 			'modified'       => $post->post_modified_gmt,
 		);
+	}
+
+	private function get_mutable_page( int $page_id ): \WP_Post|\WP_Error {
+		$post = get_post( $page_id );
+		if ( ! $post || 'page' !== $post->post_type ) {
+			return new \WP_Error( 'broseph_not_found', 'Page not found.', array( 'status' => 404 ) );
+		}
+
+		return $post;
+	}
+
+	private function normalize_bulk_page_ids( array $page_ids ): array|\WP_Error {
+		if ( empty( $page_ids ) ) {
+			return new \WP_Error(
+				'broseph_bad_request',
+				'page_ids must be a non-empty array.',
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( count( $page_ids ) > self::BULK_LIMIT ) {
+			return new \WP_Error(
+				'broseph_bad_request',
+				'A maximum of 25 page IDs is allowed per request.',
+				array( 'status' => 400 )
+			);
+		}
+
+		$normalized = array();
+		foreach ( $page_ids as $page_id ) {
+			$page_id = (int) $page_id;
+			if ( $page_id <= 0 ) {
+				return new \WP_Error(
+					'broseph_bad_request',
+					'Each page_id must be a positive integer.',
+					array( 'status' => 400 )
+				);
+			}
+
+			$normalized[] = $page_id;
+		}
+
+		return array_values( array_unique( $normalized ) );
 	}
 }

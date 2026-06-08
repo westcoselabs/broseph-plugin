@@ -104,7 +104,7 @@ class Routes {
 
 		// Domain controllers.
 		( new ScanController( $this->signer, $this->logger, $this->scanner ) )->register_routes( self::NAMESPACE );
-		( new PagesController( $this->signer, $this->logger, $this->pages ) )->register_routes( self::NAMESPACE );
+		( new PagesController( $this->signer, $this->logger, $this->pages, $this->permissions ) )->register_routes( self::NAMESPACE );
 		( new GitPressController( $this->signer, $this->logger, $this->gitpress, $this->permissions ) )->register_routes( self::NAMESPACE );
 		( new DiviController( $this->signer, $this->logger, $this->divi, $this->gitpress, $this->landing_pages, $this->permissions ) )->register_routes( self::NAMESPACE );
 		( new LandingPagesController( $this->signer, $this->logger, $this->landing_pages ) )->register_routes( self::NAMESPACE );

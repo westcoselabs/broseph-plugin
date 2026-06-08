@@ -24,6 +24,8 @@ GET /broseph/v1/tools
 
 The response `context.permissions` and each `tool.available` field are the live source of truth. Open Claw should treat these as authoritative — if `available: false`, do not attempt the call.
 
+When Brandon enables **Allow publishing pages**, Open Claw must refresh `GET /broseph/v1/tools` before attempting any publish action.
+
 ### Permission error format
 
 When an endpoint rejects due to a disabled permission:
@@ -114,6 +116,12 @@ Do not use Code Module insertion for brand-new pages.
 ### 5. Always draft, never publish
 
 Every page creation endpoint in Broseph creates a `draft`. Pages are never published automatically. A human must review and publish from wp-admin.
+
+### 5b. Publish and trash require explicit page IDs
+
+To publish pages, Open Claw must use `POST /broseph/v1/pages/bulk-publish` with an explicit `page_ids` array. Never publish without explicit user instruction.
+
+To remove probe drafts, Open Claw must use `POST /broseph/v1/pages/bulk-trash` with an explicit `page_ids` array. Only draft and pending pages may be trashed. Never trash without explicit user instruction.
 
 ### 6. Call `/content/resolve-strategy` when unsure
 

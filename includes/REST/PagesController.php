@@ -10,14 +10,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 class PagesController extends BaseController {
 
 	private \Broseph\Services\PageService $pages;
+	private \Broseph\Services\PermissionsService $permissions;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
 		\Broseph\Logging\ActionLogger $logger,
-		\Broseph\Services\PageService $pages
+		\Broseph\Services\PageService $pages,
+		\Broseph\Services\PermissionsService $permissions
 	) {
 		parent::__construct( $signer, $logger );
-		$this->pages = $pages;
+		$this->pages       = $pages;
+		$this->permissions = $permissions;
 	}
 
 	public function register_routes( string $namespace ): void {
@@ -60,6 +63,52 @@ class PagesController extends BaseController {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'handle_duplicate' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/pages/(?P<id>\d+)/publish',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_publish' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+				'args'                => array(
+					'id' => array( 'required' => true, 'type' => 'integer', 'minimum' => 1 ),
+				),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/pages/bulk-publish',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_bulk_publish' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/pages/(?P<id>\d+)/trash',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_trash' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+				'args'                => array(
+					'id' => array( 'required' => true, 'type' => 'integer', 'minimum' => 1 ),
+				),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/pages/bulk-trash',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_bulk_trash' ),
 				'permission_callback' => array( $this, 'require_signed' ),
 			)
 		);
@@ -194,6 +243,205 @@ class PagesController extends BaseController {
 				'edit_url'    => admin_url( 'post.php?post=' . $new_id . '&action=edit' ),
 			),
 			201
+		);
+	}
+
+	public function handle_publish( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_publish_pages() ) {
+			return $this->publish_permission_denied();
+		}
+
+		$body     = $request->get_json_params();
+		$body     = is_array( $body ) ? $body : array();
+		$page_id  = (int) $request->get_param( 'id' );
+		$expected = isset( $body['expected_current_status'] ) ? (string) $body['expected_current_status'] : null;
+		$result   = $this->pages->publish_page( $page_id, $expected );
+
+		if ( is_wp_error( $result ) ) {
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'publish_page_blocked',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'object_id' => $page_id,
+					'message'   => $result->get_error_message(),
+				)
+			);
+			return $result;
+		}
+
+		$this->logger->log(
+			'accepted',
+			array(
+				'task_type'       => 'page_published',
+				'endpoint'        => $request->get_route(),
+				'method'          => $request->get_method(),
+				'object_type'     => 'page',
+				'object_id'       => $page_id,
+				'before_snapshot' => array( 'status' => $result['previous_status'] ),
+				'after_snapshot'  => array( 'status' => $result['new_status'] ),
+				'message'         => sprintf( 'previous_status=%s new_status=%s', $result['previous_status'], $result['new_status'] ),
+			)
+		);
+
+		return new \WP_REST_Response( $result, 200 );
+	}
+
+	public function handle_bulk_publish( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_publish_pages() ) {
+			return $this->publish_permission_denied();
+		}
+
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
+		}
+
+		$page_ids = is_array( $body['page_ids'] ?? null ) ? $body['page_ids'] : null;
+		if ( null === $page_ids ) {
+			return new \WP_Error( 'broseph_bad_request', 'page_ids array is required.', array( 'status' => 400 ) );
+		}
+
+		$result = $this->pages->bulk_publish_pages( $page_ids );
+		if ( is_wp_error( $result ) ) {
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'bulk_publish_pages_blocked',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'message'   => $result->get_error_message(),
+				)
+			);
+			return $result;
+		}
+
+		$this->logger->log(
+			'accepted',
+			array(
+				'task_type' => 'bulk_publish_pages',
+				'endpoint'  => $request->get_route(),
+				'method'    => $request->get_method(),
+				'message'   => sprintf(
+					'requested=%d published=%d failed=%d skipped=%d',
+					$result['summary']['requested'],
+					$result['summary']['published'],
+					$result['summary']['failed'],
+					$result['summary']['skipped']
+				),
+			)
+		);
+
+		return new \WP_REST_Response( $result, 200 );
+	}
+
+	public function handle_trash( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_delete_drafts() ) {
+			return $this->trash_permission_denied();
+		}
+
+		$page_id = (int) $request->get_param( 'id' );
+		$result  = $this->pages->trash_draft_page( $page_id );
+
+		if ( is_wp_error( $result ) ) {
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'trash_draft_page_blocked',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'object_id' => $page_id,
+					'message'   => $result->get_error_message(),
+				)
+			);
+			return $result;
+		}
+
+		$this->logger->log(
+			'accepted',
+			array(
+				'task_type'       => 'draft_page_trashed',
+				'endpoint'        => $request->get_route(),
+				'method'          => $request->get_method(),
+				'object_type'     => 'page',
+				'object_id'       => $page_id,
+				'before_snapshot' => array( 'status' => $result['previous_status'] ),
+				'after_snapshot'  => array( 'status' => $result['new_status'] ),
+				'message'         => sprintf( 'previous_status=%s new_status=%s', $result['previous_status'], $result['new_status'] ),
+			)
+		);
+
+		return new \WP_REST_Response( $result, 200 );
+	}
+
+	public function handle_bulk_trash( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_delete_drafts() ) {
+			return $this->trash_permission_denied();
+		}
+
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
+		}
+
+		$page_ids = is_array( $body['page_ids'] ?? null ) ? $body['page_ids'] : null;
+		if ( null === $page_ids ) {
+			return new \WP_Error( 'broseph_bad_request', 'page_ids array is required.', array( 'status' => 400 ) );
+		}
+
+		$result = $this->pages->bulk_trash_pages( $page_ids );
+		if ( is_wp_error( $result ) ) {
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'bulk_trash_pages_blocked',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'message'   => $result->get_error_message(),
+				)
+			);
+			return $result;
+		}
+
+		$this->logger->log(
+			'accepted',
+			array(
+				'task_type' => 'bulk_trash_pages',
+				'endpoint'  => $request->get_route(),
+				'method'    => $request->get_method(),
+				'message'   => sprintf(
+					'requested=%d trashed=%d failed=%d skipped=%d',
+					$result['summary']['requested'],
+					$result['summary']['trashed'],
+					$result['summary']['failed'],
+					$result['summary']['skipped']
+				),
+			)
+		);
+
+		return new \WP_REST_Response( $result, 200 );
+	}
+
+	private function publish_permission_denied(): \WP_Error {
+		return new \WP_Error(
+			'broseph_permission_denied',
+			'Publishing pages is disabled in Broseph permissions.',
+			array(
+				'status'     => 403,
+				'permission' => 'can_publish_pages',
+			)
+		);
+	}
+
+	private function trash_permission_denied(): \WP_Error {
+		return new \WP_Error(
+			'broseph_permission_denied',
+			'Trashing drafts is disabled in Broseph permissions.',
+			array(
+				'status'     => 403,
+				'permission' => 'can_delete_drafts',
+			)
 		);
 	}
 }
