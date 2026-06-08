@@ -31,6 +31,7 @@ class Plugin {
 		$divi_form_test    = new Services\DiviContactFormTestAdapter();
 		$mail_log          = new Services\MailLogService();
 		$mail_test         = new Services\MailTestService();
+		$seo_service       = new Services\SeoService();
 		$update_service    = new Services\UpdateService( $permissions );
 
 		// Admin hub.
@@ -57,6 +58,7 @@ class Plugin {
 			$divi_form_test,
 			$mail_log,
 			$mail_test,
+			$seo_service,
 			$update_service,
 			$permissions
 		);

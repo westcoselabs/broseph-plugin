@@ -24,6 +24,7 @@ class Routes {
 	private \Broseph\Services\DiviContactFormTestAdapter $divi_form_test;
 	private \Broseph\Services\MailLogService $mail_log;
 	private \Broseph\Services\MailTestService $mail_test;
+	private \Broseph\Services\SeoService $seo_service;
 	private \Broseph\Services\UpdateService $update_service;
 	private \Broseph\Services\PermissionsService $permissions;
 
@@ -41,6 +42,7 @@ class Routes {
 		\Broseph\Services\DiviContactFormTestAdapter $divi_form_test,
 		\Broseph\Services\MailLogService $mail_log,
 		\Broseph\Services\MailTestService $mail_test,
+		\Broseph\Services\SeoService $seo_service,
 		\Broseph\Services\UpdateService $update_service,
 		\Broseph\Services\PermissionsService $permissions
 	) {
@@ -57,6 +59,7 @@ class Routes {
 		$this->divi_form_test  = $divi_form_test;
 		$this->mail_log        = $mail_log;
 		$this->mail_test       = $mail_test;
+		$this->seo_service     = $seo_service;
 		$this->update_service  = $update_service;
 		$this->permissions     = $permissions;
 	}
@@ -108,6 +111,7 @@ class Routes {
 		( new ReportsController( $this->signer, $this->logger, $this->report_builder ) )->register_routes( self::NAMESPACE );
 		( new FormsController( $this->signer, $this->logger, $this->form_service, $this->divi_form_test, $this->mail_log, $this->mail_test, $this->permissions ) )->register_routes( self::NAMESPACE );
 		( new MailController( $this->signer, $this->logger, $this->mail_test, $this->mail_log, $this->permissions ) )->register_routes( self::NAMESPACE );
+		( new SeoController( $this->signer, $this->logger, $this->seo_service, $this->permissions ) )->register_routes( self::NAMESPACE );
 		( new UpdatesController( $this->signer, $this->logger, $this->update_service ) )->register_routes( self::NAMESPACE );
 		( new ToolsController( $this->signer, $this->logger, $this->gitpress, $this->divi, $this->permissions ) )->register_routes( self::NAMESPACE );
 	}

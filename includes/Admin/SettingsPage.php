@@ -20,6 +20,7 @@ class SettingsPage {
 			'broseph_allow_gitpress_pages'          => array( 'default' => '1', 'type' => 'boolean' ),
 			'broseph_allow_divi_template_pages'     => array( 'default' => '1', 'type' => 'boolean' ),
 			'broseph_allow_divi_code_module_edits'  => array( 'default' => '1', 'type' => 'boolean' ),
+			'broseph_allow_seo_meta_edits'          => array( 'default' => '1', 'type' => 'boolean' ),
 		),
 		'code' => array(
 			'broseph_allow_js_snippets'             => array( 'default' => '0', 'type' => 'boolean' ),
@@ -97,6 +98,8 @@ class SettingsPage {
 							__( 'Allows Open Claw to create draft pages from existing Divi templates.', 'broseph' ) );
 						$this->row( 'broseph_allow_divi_code_module_edits', __( 'Allow Divi Code Module edits', 'broseph' ),
 							__( 'Allows Open Claw to add/update Divi Code Modules. Live edits still require Allow Live Edits.', 'broseph' ) );
+						$this->row( 'broseph_allow_seo_meta_edits', __( 'Allow SEO meta edits', 'broseph' ),
+							__( 'Allows Open Claw to update SEO titles, meta descriptions, focus keyphrases, and slugs for pages/posts.', 'broseph' ) );
 						?>
 					</table>
 				</div>

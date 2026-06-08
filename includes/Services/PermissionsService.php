@@ -42,6 +42,10 @@ class PermissionsService {
 		return (bool) get_option( 'broseph_allow_divi_code_module_edits', true );
 	}
 
+	public function can_edit_seo_meta(): bool {
+		return (bool) get_option( 'broseph_allow_seo_meta_edits', true );
+	}
+
 	// ── Code ─────────────────────────────────────────────────────────────────
 
 	public function can_use_js_snippets(): bool {
@@ -117,6 +121,7 @@ class PermissionsService {
 			'can_create_gitpress_pages'     => $this->can_create_gitpress_pages(),
 			'can_create_divi_template_pages' => $this->can_create_divi_template_pages(),
 			'can_edit_divi_code_modules'    => $this->can_edit_divi_code_modules(),
+			'can_edit_seo_meta'             => $this->can_edit_seo_meta(),
 			'can_use_js_snippets'           => $this->can_use_js_snippets(),
 			'can_send_mail_tests'           => $this->can_send_mail_tests(),
 			'can_submit_form_tests'         => $this->can_submit_form_tests(),
