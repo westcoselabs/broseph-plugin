@@ -51,6 +51,8 @@ The `permission` field tells Open Claw exactly which setting to check in Broseph
 | `can_live_edit` | false | Editing published pages directly |
 | `can_delete_drafts` | false | Trashing draft pages |
 | `can_create_gitpress_pages` | true | `/gitpress/pages/create` |
+| `can_convert_pages_to_gitpress` | false | `/pages/{id}/convert-to-gitpress` |
+| `can_manage_gitpress_layout` | false | `POST /gitpress/managed-layout` (reading the layout is always allowed once signed) |
 | `can_create_divi_template_pages` | true | `/divi/pages/create-from-template` |
 | `can_edit_divi_code_modules` | true | `/divi/code-module/insert-gitpress` |
 | `can_use_js_snippets` | false | JS in code modules |
@@ -74,6 +76,7 @@ The `permission` field tells Open Claw exactly which setting to check in Broseph
 | Situation | Strategy | Endpoint |
 |-----------|----------|----------|
 | New AI-generated landing page, GitPress active | `gitpress_canvas` | `POST /broseph/v1/gitpress/pages/create` |
+| Existing live page must keep page ID/permalink but switch to GitPress | `convert_page_to_gitpress` | `POST /broseph/v1/pages/{id}/convert-to-gitpress` |
 | New page cloned from an existing Divi layout | `divi_template` | `POST /broseph/v1/divi/pages/create-from-template` |
 | Adding content to an existing Divi page | `existing_divi_code_module` | `POST /broseph/v1/divi/code-module/insert-gitpress` |
 | No GitPress, no template | `native_draft` | `POST /broseph/v1/pages/create-draft` |
@@ -109,6 +112,17 @@ Use `existing_divi_code_module` only when:
 
 Do not use Code Module insertion for brand-new pages.
 
+### 3b. Convert an existing page when the URL and page ID must be preserved
+
+Use `convert_page_to_gitpress` when an existing live page should keep its original page ID, permalink, slug, title, status, parent, menu relationships, featured image, and SEO metadata, but should stop relying on Divi/native `post_content` for rendering.
+
+For published page conversions:
+- Always use `backup_first: true`.
+- Always include `expected_slug` and `expected_status`.
+- Never use `create_gitpress_page` when the goal is to preserve an existing URL/page ID.
+- Never use Divi Code Module insertion when the goal is to stop using Divi content.
+- Do not publish or unpublish as part of conversion; the endpoint preserves the current status.
+
 ### 4. Never combine GitPress Canvas and Code Module on the same new page
 
 `gitpress_canvas` and `existing_divi_code_module` are mutually exclusive workflows for new pages. Combining them on the same page is only valid if the user explicitly requests it after understanding both approaches.
@@ -126,6 +140,61 @@ To remove probe drafts, Open Claw must use `POST /broseph/v1/pages/bulk-trash` w
 ### 6. Call `/content/resolve-strategy` when unsure
 
 Before creating any page, if the correct workflow is unclear, call the resolver endpoint. It returns the recommended strategy, the exact endpoint to call next, and all required parameters.
+
+---
+
+## GitPress Managed Mode
+
+GitPress / Divi GitHub Sync supports three page render modes. All three are accepted anywhere Broseph accepts a `render_mode` value (`/gitpress/pages/create`, `/pages/{id}/convert-to-gitpress`):
+
+- **`theme_wrapped`** — Use for normal pages that should use the client's existing Divi/WordPress header, menu, and footer.
+- **`full_canvas`** — Use for standalone landing pages that should render only the page body shortcode, bypassing the theme wrapper.
+- **`gitpress_managed`** — Use when GitPress itself should control the reusable header and footer, sourced from GitHub via the global GitPress-managed shortcodes (`dgs_managed_header_shortcode` / `dgs_managed_footer_shortcode`), with the page body rendered between them.
+
+`gitpress_managed` always normalizes `full_page_canvas` to `true` and `render_position` to `replace`; `full_width_content` is ignored. Conflicting values sent by Open Claw are normalized safely and reported back in the `warnings` array rather than rejected.
+
+GitPress Managed mode is never forced onto existing pages — it is only applied when `render_mode: "gitpress_managed"` is explicitly passed to `create_gitpress_page` or `convert_page_to_gitpress`.
+
+### Reading and updating the managed header/footer
+
+The global managed header/footer shortcodes are site-wide settings, separate from any individual page. Open Claw can read them at any time, but updating them requires the **"Allow managing GitPress header/footer layout"** permission (`can_manage_gitpress_layout`, default `false`).
+
+**Read (always allowed once signed):**
+```
+GET /wp-json/broseph/v1/gitpress/managed-layout
+```
+```json
+{
+  "gitpress_active": true,
+  "render_mode_supported": true,
+  "header": { "shortcode": "[divi_github_content owner=\"...\" repo=\"...\" branch=\"main\" path=\"global/header.html\" format=\"html\"]", "is_set": true },
+  "footer": { "shortcode": "[divi_github_content owner=\"...\" repo=\"...\" branch=\"main\" path=\"global/footer.html\" format=\"html\"]", "is_set": true },
+  "warnings": []
+}
+```
+
+**Update (requires `can_manage_gitpress_layout`):**
+```
+POST /wp-json/broseph/v1/gitpress/managed-layout
+```
+```json
+{
+  "header_shortcode": "[divi_github_content owner=\"citrynmarketingdevelopment\" repo=\"wp-landingpages\" branch=\"main\" path=\"global/headers/optimax-header.html\" format=\"html\"]",
+  "footer_shortcode": "[divi_github_content owner=\"citrynmarketingdevelopment\" repo=\"wp-landingpages\" branch=\"main\" path=\"global/footers/optimax-footer.html\" format=\"html\"]"
+}
+```
+
+Only `[divi_github]` and `[divi_github_content]` shortcodes are accepted. Script tags, PHP tags, `javascript:` URLs, credential URLs, and token/secret/key query parameters are always rejected. If only one of the two fields is invalid, the valid field is still saved and the invalid one is reported in `warnings`. Update this setting only when Brandon explicitly asks to change the managed header or footer — never as a side effect of creating or converting a page.
+
+### Standard Open Claw flow for GitPress Managed pages
+
+1. Refresh `GET /broseph/v1/tools`.
+2. Confirm `gitpress_managed` is listed in `context.gitpress.supported_render_modes`.
+3. Confirm the managed header/footer shortcodes are set using `GET /gitpress/managed-layout` (or check `context.gitpress.managed_layout` from `/tools`).
+4. If Brandon explicitly asks to set or update the managed header/footer, use `POST /gitpress/managed-layout`.
+5. Create or convert the page with `render_mode: "gitpress_managed"`.
+6. Verify the live/preview output shows the GitPress header, the page body, and the GitPress footer.
+7. Confirm the Divi/theme header and footer are not duplicated on the page.
 
 ---
 
@@ -167,6 +236,27 @@ Before creating any page, if the correct workflow is unclear, call the resolver 
   "warnings": []
 }
 ```
+
+---
+
+### 1b. Create a GitPress Managed page
+
+**Endpoint:** `POST /wp-json/broseph/v1/gitpress/pages/create`
+**Signed routePath:** `/broseph/v1/gitpress/pages/create`
+
+```json
+{
+  "title": "Payroll Services Denver, CO",
+  "slug": "payroll-services-denver-co",
+  "shortcode": "[divi_github_content owner=\"citrynmarketingdevelopment\" repo=\"wp-landingpages\" branch=\"main\" path=\"optimax/payroll-services-denver-co.html\" format=\"html\"]",
+  "render_mode": "gitpress_managed",
+  "render_position": "replace",
+  "full_width_content": false,
+  "full_page_canvas": true
+}
+```
+
+GitPress renders this page between the global managed header and footer shortcodes — Open Claw does not need to repeat header/footer content per page. The page is always created as a `draft`.
 
 ---
 

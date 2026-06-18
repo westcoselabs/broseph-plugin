@@ -89,6 +89,26 @@ class GitPressController extends BaseController {
 				),
 			)
 		);
+
+		register_rest_route(
+			$namespace,
+			'/gitpress/managed-layout',
+			array(
+				'methods'             => \WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'handle_get_managed_layout' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/gitpress/managed-layout',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_update_managed_layout' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+			)
+		);
 	}
 
 	public function handle_status( \WP_REST_Request $request ): \WP_REST_Response {
@@ -196,6 +216,75 @@ class GitPressController extends BaseController {
 		$this->log_accepted( $request, 'gitpress_page_settings', 'page', $id );
 
 		return new \WP_REST_Response( $result, 200 );
+	}
+
+	public function handle_get_managed_layout( \WP_REST_Request $request ): \WP_REST_Response {
+		$this->log_accepted( $request, 'gitpress_managed_layout_read' );
+		return new \WP_REST_Response( $this->gitpress->get_managed_layout(), 200 );
+	}
+
+	public function handle_update_managed_layout( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		if ( ! $this->permissions->can_manage_gitpress_layout() ) {
+			$error = $this->manage_layout_permission_denied();
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'gitpress_managed_layout_update_blocked',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'message'   => $error->get_error_message(),
+				)
+			);
+			return $error;
+		}
+
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
+		}
+
+		$result = $this->gitpress->update_managed_layout( $body );
+		if ( is_wp_error( $result ) ) {
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'gitpress_managed_layout_update_failed',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'message'   => $result->get_error_message(),
+				)
+			);
+			return $result;
+		}
+
+		$this->logger->log(
+			'accepted',
+			array(
+				'task_type'       => 'gitpress_managed_layout_updated',
+				'endpoint'        => $request->get_route(),
+				'method'          => $request->get_method(),
+				'before_snapshot' => $result['before'],
+				'after_snapshot'  => $result['after'],
+				'message'         => sprintf(
+					'header_updated=%s footer_updated=%s',
+					$result['updated']['header_shortcode'] ? 'yes' : 'no',
+					$result['updated']['footer_shortcode'] ? 'yes' : 'no'
+				),
+			)
+		);
+
+		return new \WP_REST_Response( $result, 200 );
+	}
+
+	private function manage_layout_permission_denied(): \WP_Error {
+		return new \WP_Error(
+			'broseph_permission_denied',
+			'Managing GitPress layout is disabled in Broseph permissions.',
+			array(
+				'status'     => 403,
+				'permission' => 'can_manage_gitpress_layout',
+			)
+		);
 	}
 
 	private function log_accepted( \WP_REST_Request $request, string $task_type, string $object_type = '', int $object_id = 0 ): void {

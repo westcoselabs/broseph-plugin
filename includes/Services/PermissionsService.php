@@ -34,6 +34,14 @@ class PermissionsService {
 		return (bool) get_option( 'broseph_allow_gitpress_pages', true );
 	}
 
+	public function can_convert_pages_to_gitpress(): bool {
+		return (bool) get_option( 'broseph_allow_convert_pages_to_gitpress', false );
+	}
+
+	public function can_manage_gitpress_layout(): bool {
+		return (bool) get_option( 'broseph_allow_manage_gitpress_layout', false );
+	}
+
 	public function can_create_divi_template_pages(): bool {
 		return (bool) get_option( 'broseph_allow_divi_template_pages', true );
 	}
@@ -119,6 +127,8 @@ class PermissionsService {
 			'can_live_edit'                 => $this->can_live_edit(),
 			'can_delete_drafts'             => $this->can_delete_drafts(),
 			'can_create_gitpress_pages'     => $this->can_create_gitpress_pages(),
+			'can_convert_pages_to_gitpress' => $this->can_convert_pages_to_gitpress(),
+			'can_manage_gitpress_layout'    => $this->can_manage_gitpress_layout(),
 			'can_create_divi_template_pages' => $this->can_create_divi_template_pages(),
 			'can_edit_divi_code_modules'    => $this->can_edit_divi_code_modules(),
 			'can_edit_seo_meta'             => $this->can_edit_seo_meta(),

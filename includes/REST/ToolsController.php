@@ -51,6 +51,7 @@ class ToolsController extends BaseController {
 		$gp_available = $this->gitpress->is_active() && $this->gitpress->is_shortcode_registered();
 		$divi_active  = $this->divi->is_divi_active();
 		$perms        = $this->permissions->get_permissions_summary();
+		$layout       = $this->gitpress->get_managed_layout();
 
 		return new \WP_REST_Response(
 			array(
@@ -60,6 +61,15 @@ class ToolsController extends BaseController {
 					'gitpress_available' => $gp_available,
 					'divi_active'        => $divi_active,
 					'permissions'        => $perms,
+					'gitpress'           => array(
+						'active'                 => $layout['gitpress_active'],
+						'supported_render_modes' => array( 'theme_wrapped', 'full_canvas', 'gitpress_managed' ),
+						'managed_layout'         => array(
+							'available'             => $layout['gitpress_active'] && ! empty( $perms['can_manage_gitpress_layout'] ),
+							'header_shortcode_set'  => $layout['header']['is_set'],
+							'footer_shortcode_set'  => $layout['footer']['is_set'],
+						),
+					),
 				),
 				'tools'     => $this->build_manifest( $gp_available, $divi_active, $perms ),
 			),
@@ -297,7 +307,7 @@ class ToolsController extends BaseController {
 			),
 			array(
 				'name'              => 'create_gitpress_page',
-				'description'       => 'Default for new AI-generated landing pages. Creates a draft page using GitPress page-level shortcode/full-page canvas. Does not use Divi Builder. Requires the "Allow GitPress page creation" permission setting.',
+				'description'       => 'Default for new AI-generated landing pages. Creates a draft page using GitPress page-level shortcode/full-page canvas. Does not use Divi Builder. render_mode must be one of theme_wrapped, full_canvas, or gitpress_managed (defaults based on full_page_canvas if omitted). Requires the "Allow GitPress page creation" permission setting.',
 				'method'            => 'POST',
 				'endpoint'          => '/broseph/v1/gitpress/pages/create',
 				'risk_level'        => 'draft_mutation',
@@ -305,8 +315,47 @@ class ToolsController extends BaseController {
 				'requires_gitpress' => true,
 				'requires_divi'     => false,
 				'available'         => $gp && $p['can_create_gitpress_pages'],
-				'input_schema'      => array( 'title', 'slug', 'excerpt', 'shortcode', 'render_position', 'full_page_canvas', 'meta' ),
-				'output_schema'     => array( 'status', 'page_id', 'preview_url', 'edit_url', 'shortcode', 'render_position', 'full_page_canvas', 'warnings' ),
+				'input_schema'      => array( 'title', 'slug', 'excerpt', 'shortcode', 'render_mode', 'render_position', 'full_page_canvas', 'full_width_content', 'meta' ),
+				'output_schema'     => array( 'status', 'page_id', 'preview_url', 'edit_url', 'shortcode', 'render_position', 'render_mode', 'full_page_canvas', 'warnings' ),
+			),
+			array(
+				'name'              => 'convert_page_to_gitpress',
+				'description'       => 'Convert one existing WordPress page in place from Divi/native content to GitPress page-level rendering while preserving the original page ID, permalink, title, slug, status, and SEO meta. render_mode must be one of theme_wrapped, full_canvas, or gitpress_managed.',
+				'method'            => 'POST',
+				'endpoint'          => '/broseph/v1/pages/{id}/convert-to-gitpress',
+				'risk_level'        => 'content_migration',
+				'requires_approval' => true,
+				'requires_gitpress' => true,
+				'requires_divi'     => false,
+				'available'         => $gp && $p['can_convert_pages_to_gitpress'],
+				'input_schema'      => array( 'id', 'shortcode', 'render_mode', 'render_position', 'full_width_content', 'full_page_canvas', 'backup_first', 'clear_existing_content', 'disable_divi_builder', 'expected_slug', 'expected_status' ),
+				'output_schema'     => array( 'status', 'page_id', 'backup', 'before', 'after', 'preview_url', 'edit_url', 'warnings' ),
+			),
+			array(
+				'name'              => 'get_gitpress_managed_layout',
+				'description'       => 'Read the global GitPress Managed header/footer shortcodes and whether they are set.',
+				'method'            => 'GET',
+				'endpoint'          => '/broseph/v1/gitpress/managed-layout',
+				'risk_level'        => 'read_only',
+				'requires_approval' => false,
+				'requires_gitpress' => true,
+				'requires_divi'     => false,
+				'available'         => $gp,
+				'input_schema'      => array(),
+				'output_schema'     => array( 'gitpress_active', 'render_mode_supported', 'header', 'footer', 'warnings' ),
+			),
+			array(
+				'name'              => 'update_gitpress_managed_layout',
+				'description'       => 'Update the global GitPress Managed header and/or footer shortcode. Only [divi_github] and [divi_github_content] shortcodes are accepted. Requires the "Allow managing GitPress header/footer layout" permission setting.',
+				'method'            => 'POST',
+				'endpoint'          => '/broseph/v1/gitpress/managed-layout',
+				'risk_level'        => 'settings_mutation',
+				'requires_approval' => true,
+				'requires_gitpress' => true,
+				'requires_divi'     => false,
+				'available'         => $gp && $p['can_manage_gitpress_layout'],
+				'input_schema'      => array( 'header_shortcode', 'footer_shortcode' ),
+				'output_schema'     => array( 'status', 'updated', 'before', 'after', 'warnings' ),
 			),
 			array(
 				'name'              => 'get_gitpress_page_settings',

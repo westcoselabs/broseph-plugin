@@ -3,7 +3,7 @@
  * Plugin Name:       Broseph
  * Plugin URI:        https://openclaw.io
  * Description:       Connects your WordPress site to Open Claw, the AI agent system by WestCose Labs. Enables secure AI-assisted content creation, Divi page management, GitPress shortcode injection, and site health reporting — all controlled through signed API requests. No content is published or modified without explicit approval.
- * Version:           0.1.0
+ * Version:           0.1.1
  * Author:            WestCose Labs
  * Author URI:        https://westcoselabs.com
  * Text Domain:       broseph
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'BROSEPH_VERSION', '0.1.0' );
+define( 'BROSEPH_VERSION', '0.1.1' );
 define( 'BROSEPH_PLUGIN_FILE', __FILE__ );
 define( 'BROSEPH_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BROSEPH_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

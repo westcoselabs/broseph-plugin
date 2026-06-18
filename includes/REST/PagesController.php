@@ -10,16 +10,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 class PagesController extends BaseController {
 
 	private \Broseph\Services\PageService $pages;
+	private \Broseph\Services\GitPressIntegration $gitpress;
 	private \Broseph\Services\PermissionsService $permissions;
 
 	public function __construct(
 		\Broseph\Auth\RequestSigner $signer,
 		\Broseph\Logging\ActionLogger $logger,
 		\Broseph\Services\PageService $pages,
+		\Broseph\Services\GitPressIntegration $gitpress,
 		\Broseph\Services\PermissionsService $permissions
 	) {
 		parent::__construct( $signer, $logger );
 		$this->pages       = $pages;
+		$this->gitpress    = $gitpress;
 		$this->permissions = $permissions;
 	}
 
@@ -73,6 +76,19 @@ class PagesController extends BaseController {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'handle_publish' ),
+				'permission_callback' => array( $this, 'require_signed' ),
+				'args'                => array(
+					'id' => array( 'required' => true, 'type' => 'integer', 'minimum' => 1 ),
+				),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/pages/(?P<id>\d+)/convert-to-gitpress',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_convert_to_gitpress' ),
 				'permission_callback' => array( $this, 'require_signed' ),
 				'args'                => array(
 					'id' => array( 'required' => true, 'type' => 'integer', 'minimum' => 1 ),
@@ -288,6 +304,86 @@ class PagesController extends BaseController {
 		return new \WP_REST_Response( $result, 200 );
 	}
 
+	public function handle_convert_to_gitpress( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+		$page_id = (int) $request->get_param( 'id' );
+
+		$this->logger->log(
+			'accepted',
+			array(
+				'task_type' => 'convert_page_to_gitpress_requested',
+				'endpoint'  => $request->get_route(),
+				'method'    => $request->get_method(),
+				'object_type' => 'page',
+				'object_id' => $page_id,
+			)
+		);
+
+		if ( ! $this->permissions->can_convert_pages_to_gitpress() ) {
+			$error = $this->convert_permission_denied();
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'convert_page_to_gitpress_blocked',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'object_id' => $page_id,
+					'message'   => $error->get_error_message(),
+				)
+			);
+			return $error;
+		}
+
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			return new \WP_Error( 'broseph_bad_request', 'JSON body required.', array( 'status' => 400 ) );
+		}
+
+		$result = $this->gitpress->convert_page_to_gitpress( $page_id, $body );
+		if ( is_wp_error( $result ) ) {
+			$this->logger->log(
+				'rejected',
+				array(
+					'task_type' => 'convert_page_to_gitpress_failed',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'object_id' => $page_id,
+					'message'   => $result->get_error_message(),
+				)
+			);
+			return $result;
+		}
+
+		if ( ! empty( $result['backup']['created'] ) ) {
+			$this->logger->log(
+				'accepted',
+				array(
+					'task_type' => 'convert_page_to_gitpress_backup_created',
+					'endpoint'  => $request->get_route(),
+					'method'    => $request->get_method(),
+					'object_type' => 'page',
+					'object_id' => (int) $result['backup']['backup_page_id'],
+					'message'   => 'Backup draft created before GitPress conversion.',
+				)
+			);
+		}
+
+		$this->logger->log(
+			'accepted',
+			array(
+				'task_type'       => 'convert_page_to_gitpress_' . $result['status'],
+				'endpoint'        => $request->get_route(),
+				'method'          => $request->get_method(),
+				'object_type'     => 'page',
+				'object_id'       => $page_id,
+				'before_snapshot' => $result['before'] ?? null,
+				'after_snapshot'  => $result['after'] ?? null,
+				'message'         => 'GitPress conversion status: ' . $result['status'],
+			)
+		);
+
+		return new \WP_REST_Response( $result, 'partial' === $result['status'] ? 207 : 200 );
+	}
+
 	public function handle_bulk_publish( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		if ( ! $this->permissions->can_publish_pages() ) {
 			return $this->publish_permission_denied();
@@ -441,6 +537,17 @@ class PagesController extends BaseController {
 			array(
 				'status'     => 403,
 				'permission' => 'can_delete_drafts',
+			)
+		);
+	}
+
+	private function convert_permission_denied(): \WP_Error {
+		return new \WP_Error(
+			'broseph_permission_denied',
+			'Converting pages to GitPress is disabled in Broseph permissions.',
+			array(
+				'status'     => 403,
+				'permission' => 'can_convert_pages_to_gitpress',
 			)
 		);
 	}

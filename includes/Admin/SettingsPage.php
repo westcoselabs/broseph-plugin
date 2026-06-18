@@ -18,6 +18,8 @@ class SettingsPage {
 			'broseph_allow_live_edits'              => array( 'default' => '0', 'type' => 'boolean' ),
 			'broseph_allow_delete_drafts'           => array( 'default' => '0', 'type' => 'boolean' ),
 			'broseph_allow_gitpress_pages'          => array( 'default' => '1', 'type' => 'boolean' ),
+			'broseph_allow_convert_pages_to_gitpress' => array( 'default' => '0', 'type' => 'boolean' ),
+			'broseph_allow_manage_gitpress_layout'  => array( 'default' => '0', 'type' => 'boolean' ),
 			'broseph_allow_divi_template_pages'     => array( 'default' => '1', 'type' => 'boolean' ),
 			'broseph_allow_divi_code_module_edits'  => array( 'default' => '1', 'type' => 'boolean' ),
 			'broseph_allow_seo_meta_edits'          => array( 'default' => '1', 'type' => 'boolean' ),
@@ -94,6 +96,10 @@ class SettingsPage {
 							__( 'Allows Open Claw to trash draft pages only. Permanent deletion is never allowed.', 'broseph' ) );
 						$this->row( 'broseph_allow_gitpress_pages', __( 'Allow GitPress page creation', 'broseph' ),
 							__( 'Allows Open Claw to create draft pages using GitPress page-level shortcode/full-page canvas.', 'broseph' ) );
+						$this->row( 'broseph_allow_convert_pages_to_gitpress', __( 'Allow converting existing pages to GitPress', 'broseph' ),
+							__( 'Allows Open Claw to convert an existing WordPress page in place from Divi/native content to GitPress page-level rendering.', 'broseph' ) );
+						$this->row( 'broseph_allow_manage_gitpress_layout', __( 'Allow managing GitPress header/footer layout', 'broseph' ),
+							__( 'Allows Open Claw to read and update the global GitPress Managed header and footer shortcodes.', 'broseph' ) );
 						$this->row( 'broseph_allow_divi_template_pages', __( 'Allow Divi template page creation', 'broseph' ),
 							__( 'Allows Open Claw to create draft pages from existing Divi templates.', 'broseph' ) );
 						$this->row( 'broseph_allow_divi_code_module_edits', __( 'Allow Divi Code Module edits', 'broseph' ),
